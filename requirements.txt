@@ -1,0 +1,10 @@
+# Packages needed up to the current stage (ingestion).
+# We add packages as each stage is built, so every line here has a reason.
+pandas>=2.0,<3.0
+numpy>=1.24,<3.0
+pyarrow>=14.0        # lets pandas and Spark read/write Parquet files
+pyyaml>=6.0          # reads params.yaml
+dvc>=3.0             # data versioning and pipeline (dvc repro)
+pytest>=7.0          # unit tests
+jupyter>=1.0         # notebooks for exploratory data analysis
+matplotlib>=3.7      # plots during EDA

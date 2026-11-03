@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Logs are produced at run time, not source code
+logs/*.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Note: data folders are NOT listed here by hand.
+# DVC writes its own .gitignore entries for data/raw and data/interim,
+# so Git stores only the small .dvc pointer files, not the data itself.

@@ -1,0 +1,15 @@
+# params.yaml
+# Every tunable value in the pipeline lives here, not inside the code.
+# DVC watches this file: if a value used by a stage changes, `dvc repro`
+# knows that stage (and everything after it) must be re-run.
+
+data:
+  raw_dir: data/raw          # original NASA text files (tracked by DVC, never edited)
+  interim_dir: data/interim  # cleaned and labelled tables written by the ingest stage
+  # We ingest all four subsets now. FD001 is used for training first;
+  # FD002 to FD004 are kept for the drift-replay demo later.
+  subsets: [FD001, FD002, FD003, FD004]
+
+label:
+  # An engine is labelled "at risk" (1) if it has this many cycles or fewer left.
+  horizon: 30
