@@ -1,0 +1,40 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python -m src.data.ingest
+    deps:
+    - path: data/raw
+      hash: md5
+      md5: 4f031cda497f36cac6922c0e7238b1f9.dir
+      size: 44913306
+      nfiles: 12
+    - path: src/config.py
+      hash: md5
+      md5: 6edb2cdcf7e97dc75524cfba8cf4383f
+      size: 2249
+    - path: src/data/ingest.py
+      hash: md5
+      md5: 8f5e19c6e46955260694c6018f725072
+      size: 8128
+    params:
+      params.yaml:
+        data:
+          raw_dir: data/raw
+          interim_dir: data/interim
+          subsets:
+          - FD001
+          - FD002
+          - FD003
+          - FD004
+        label:
+          horizon: 30
+    outs:
+    - path: data/interim
+      hash: md5
+      md5: a6ccdfacdb9d3d260ee26129059365ba.dir
+      size: 8986057
+      nfiles: 8
+    - path: reports/ingest_report.json
+      hash: md5
+      md5: 07cdb5f62eca999a7f46a04f44f7be23
+      size: 955
