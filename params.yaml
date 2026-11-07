@@ -35,7 +35,7 @@ train:
   input_dir: data/features
   # Datasets to train on. FD001 = one flight condition. A retraining job
   # (Task 9) may add FD002 when data from six flight conditions starts arriving.
-  subsets: [FD001]
+  subsets: [FD001, FD002]
   model_type: xgboost           # xgboost | random_forest | logistic_regression
   n_splits: 5                   # GroupKFold folds (split by engine, never by row)
   target_recall: 0.90           # pick the threshold that catches at least 90% of failures
