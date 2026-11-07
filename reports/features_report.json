@@ -5,39 +5,39 @@
   "tables": {
     "train_FD001": {
       "rows": 20631,
-      "seconds": 5.85
+      "seconds": 9.5
     },
     "test_FD001": {
       "rows": 13096,
-      "seconds": 1.65
+      "seconds": 2.93
     },
     "train_FD002": {
       "rows": 53759,
-      "seconds": 1.96
+      "seconds": 3.4
     },
     "test_FD002": {
       "rows": 33991,
-      "seconds": 1.75
+      "seconds": 3.21
     },
     "train_FD003": {
       "rows": 24720,
-      "seconds": 1.63
+      "seconds": 3.02
     },
     "test_FD003": {
       "rows": 16596,
-      "seconds": 1.29
+      "seconds": 2.32
     },
     "train_FD004": {
       "rows": 61249,
-      "seconds": 1.79
+      "seconds": 3.17
     },
     "test_FD004": {
       "rows": 41214,
-      "seconds": 1.48
+      "seconds": 3.03
     }
   },
   "total_rows": 265256,
-  "spark_startup_seconds": 3.71,
-  "processing_seconds": 17.6,
-  "rows_per_second": 15075
+  "spark_startup_seconds": 7.39,
+  "processing_seconds": 30.92,
+  "rows_per_second": 8579
 }
