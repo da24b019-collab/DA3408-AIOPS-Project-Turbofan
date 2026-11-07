@@ -23,7 +23,7 @@
     ]
   },
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "panels": [
     {
       "type": "row",
@@ -136,7 +136,8 @@
           },
           "expr": "pdm_model_info",
           "legendFormat": "v{{version}} {{model_type}}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -410,7 +411,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(pdm_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(pdm_http_requests_total[5m]))",
+          "expr": "(sum(rate(pdm_http_requests_total{status=~\"5..\"}[5m])) or vector(0)) / sum(rate(pdm_http_requests_total[5m]))",
           "legendFormat": "server errors (5xx)",
           "refId": "A"
         },
@@ -419,7 +420,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(pdm_http_requests_total{status=~\"4..\"}[5m])) / sum(rate(pdm_http_requests_total[5m]))",
+          "expr": "(sum(rate(pdm_http_requests_total{status=~\"4..\"}[5m])) or vector(0)) / sum(rate(pdm_http_requests_total[5m]))",
           "legendFormat": "rejected input (4xx)",
           "refId": "B"
         }
@@ -725,7 +726,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(pdm_predictions_total)",
+          "expr": "sum(pdm_predictions_total) or vector(0)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -999,7 +1000,8 @@
           },
           "expr": "sort_desc(pdm_drift_psi)",
           "legendFormat": "{{sensor}}",
-          "refId": "A"
+          "refId": "A",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -1514,7 +1516,20 @@
             "mode": "thresholds"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "version"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
