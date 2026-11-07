@@ -31,8 +31,11 @@ def summary_sentence(level: str, factors: list) -> str:
     raising = [f["description"] for f in factors if f["effect"] == "raises risk"]
     if not raising:
         return opening
-    verb = "is" if len(raising) == 1 else "are"
-    return f"{opening} Main reasons: {' and '.join(raising)} {verb} raising the risk."
+    if len(raising) == 1:
+        reasons = f"{raising[0]} is"
+    else:  # "A, B and C are"
+        reasons = f"{', '.join(raising[:-1])} and {raising[-1]} are"
+    return f"{opening} Main reasons: {reasons} raising the risk."
 
 
 def predict_engines(readings: pd.DataFrame, service, sensors: list, window: int) -> dict:

@@ -8,11 +8,15 @@ of what happened. The rubric also checks for logging explicitly.
 """
 
 import logging
+import os
 from pathlib import Path
 
 from src.config import PROJECT_ROOT
 
-LOG_DIR = PROJECT_ROOT / "logs"
+# LOG_DIR can be changed with an environment variable. The tests use this to
+# write their logs to a temporary folder, so test errors never appear in the
+# real logs (and on the dashboard's error console).
+LOG_DIR = Path(os.getenv("LOG_DIR", PROJECT_ROOT / "logs"))
 LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 
 

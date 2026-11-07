@@ -44,6 +44,9 @@ class FakeModelService:
     def load(self):
         raise ModelUnavailableError("registry unreachable")
 
+    def load_if_missing(self):
+        pass
+
     def predict_proba(self, X):
         if not self._loaded:
             raise ModelUnavailableError("No model is loaded.")
@@ -185,3 +188,10 @@ def test_too_many_rows():
     df = pd.DataFrame(engine_rows(1, 5, 47.0))
     with pytest.raises(InputValidationError):
         validate_readings(df, SENSORS, max_rows=4)
+
+
+def test_summary_lists_reasons_naturally():
+    from src.api.prediction import summary_sentence
+    factors = [{"description": d, "effect": "raises risk"} for d in ("A", "B", "C")]
+    assert summary_sentence("high", factors).endswith("Main reasons: A, B and C are raising the risk.")
+    assert summary_sentence("high", factors[:1]).endswith("Main reasons: A is raising the risk.")

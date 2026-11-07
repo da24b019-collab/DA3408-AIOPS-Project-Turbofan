@@ -11,7 +11,9 @@ because SHAP needs the real model object to explain a prediction.
 """
 
 import json
+import os
 import threading
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -25,8 +27,14 @@ from mlflow.tracking import MlflowClient
 
 from src.config import SENSOR_DESCRIPTIONS
 from src.logger import get_logger
+from src.models.tracking import check_mlflow_server
 
 logger = get_logger(__name__, log_file="api.log")
+
+# By default the MLflow client retries a failed request for several minutes.
+# An API must answer quickly, so we allow 2 retries and 10 seconds per request.
+os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "2")
+os.environ.setdefault("MLFLOW_HTTP_REQUEST_TIMEOUT", "10")
 
 
 class ModelUnavailableError(Exception):
@@ -40,6 +48,7 @@ class ModelService:
         self.explainer = None      # SHAP explainer for that model
         self.info = {}             # version, threshold, features, ...
         self._lock = threading.Lock()  # a reload must not happen halfway through a request
+        self._last_attempt = 0.0   # when we last tried to load (for automatic retries)
 
     # ------------------------------------------------------------------ loading
     @property
@@ -52,6 +61,10 @@ class ModelService:
         If loading fails, the previously loaded model stays in use.
         """
         s = self.settings
+        try:
+            check_mlflow_server(s.mlflow_tracking_uri)  # fail in seconds, not minutes
+        except RuntimeError as err:
+            raise ModelUnavailableError(f"Model registry unreachable at {s.mlflow_tracking_uri}") from err
         mlflow.set_tracking_uri(s.mlflow_tracking_uri)
         uri = f"models:/{s.model_name}@{s.model_alias}"
         try:
@@ -91,6 +104,19 @@ class ModelService:
         logger.info("Loaded %s version %s (%s, threshold %.3f)",
                     s.model_name, info["version"], info["model_type"], info["threshold"])
         return info
+
+    def load_if_missing(self, retry_seconds: float = 30) -> None:
+        """
+        Self-healing: if no model is loaded (e.g. the registry was down when the
+        API started), try again, but at most once every `retry_seconds`.
+        """
+        if self.is_loaded or time.time() - self._last_attempt < retry_seconds:
+            return
+        self._last_attempt = time.time()
+        try:
+            self.load()
+        except ModelUnavailableError as err:
+            logger.warning("Model still unavailable: %s", err)
 
     @staticmethod
     def _make_explainer(model, model_type: str):

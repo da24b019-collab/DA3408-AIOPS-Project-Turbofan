@@ -8,6 +8,9 @@ Endpoints (full specification in docs/lld_api.md):
     POST /model/reload   load the current champion (after an approval)
     POST /predict        predict from JSON readings
     POST /predict/csv    predict from an uploaded CSV file
+    GET  /pipeline/status   DVC stages, their status and metrics
+    GET  /pipeline/runs     MLflow training runs (successful and failed)
+    GET  /logs/recent       latest warnings and errors from the logs
 
 Run it with:
     uvicorn src.api.main:app --host 127.0.0.1 --port 8000
@@ -17,7 +20,7 @@ Interactive documentation: http://127.0.0.1:8000/docs
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -30,17 +33,23 @@ from src.api.engine_data import (
     validate_readings,
 )
 from src.api.model_service import ModelService, ModelUnavailableError
+from src.api.pipeline_info import mlflow_runs, pipeline_status, recent_log_events
 from src.api.prediction import predict_engines
 from src.api.schemas import (
     ErrorResponse,
     HealthResponse,
+    LogEventsResponse,
     ModelInfoResponse,
+    PipelineStatusResponse,
     PredictionResponse,
     PredictRequest,
     ReadyResponse,
+    RunsResponse,
 )
 from src.api.settings import Settings
-from src.logger import get_logger
+from src.config import PROJECT_ROOT
+from src.models.tracking import check_mlflow_server
+from src.logger import LOG_DIR, get_logger
 
 logger = get_logger("api", log_file="api.log")
 
@@ -114,6 +123,14 @@ def create_app(settings: Settings = None, service: ModelService = None) -> FastA
         logger.exception("Unexpected error: %s", exc)
         return error(500, "internal_error", "Something went wrong. The error has been logged.")
 
+    class ServiceUnavailable(Exception):
+        """Another service this endpoint needs (e.g. the MLflow tracking server) is down."""
+
+    @app.exception_handler(ServiceUnavailable)
+    async def service_unavailable(_, exc):
+        logger.error("Service unavailable: %s", exc)
+        return error(503, "service_unavailable", str(exc))
+
     # ----------------------------------------------------------- API key
     class Unauthorized(Exception):
         pass
@@ -135,6 +152,7 @@ def create_app(settings: Settings = None, service: ModelService = None) -> FastA
 
     @app.get("/ready", response_model=ReadyResponse, tags=["status"])
     def ready():
+        service.load_if_missing()
         server, in_sync = service.model_server_status()
         # Ready only if predictions can succeed AND come from the same model version
         # whose threshold and explanations we use (in_sync is None when not checked)
@@ -179,7 +197,29 @@ def create_app(settings: Settings = None, service: ModelService = None) -> FastA
         readings = validate_readings(frame, settings.sensors, settings.max_rows)
         return run_prediction(readings)
 
+    @app.get("/pipeline/status", response_model=PipelineStatusResponse, tags=["pipeline"],
+             dependencies=protected, responses=ERROR_RESPONSES)
+    def get_pipeline_status():
+        return pipeline_status(PROJECT_ROOT)
+
+    @app.get("/pipeline/runs", response_model=RunsResponse, tags=["pipeline"],
+             dependencies=protected, responses=ERROR_RESPONSES)
+    def get_pipeline_runs(limit: int = Query(20, ge=1, le=200)):
+        try:
+            check_mlflow_server(settings.mlflow_tracking_uri)  # fail in seconds if it is down
+            return mlflow_runs(settings.mlflow_tracking_uri, settings.experiment_name,
+                               settings.model_name, limit)
+        except Exception as err:
+            logger.error("Could not read MLflow runs: %s", err)  # full detail in the log only
+            raise ServiceUnavailable("The MLflow tracking server is not reachable.") from err
+
+    @app.get("/logs/recent", response_model=LogEventsResponse, tags=["pipeline"],
+             dependencies=protected, responses=ERROR_RESPONSES)
+    def get_recent_logs(limit: int = Query(50, ge=1, le=500)):
+        return {"events": recent_log_events(LOG_DIR, limit)}
+
     def run_prediction(readings):
+        service.load_if_missing()
         if not service.is_loaded:
             raise ModelUnavailableError("No model is loaded.")
         result = predict_engines(readings, service, settings.sensors, settings.window)

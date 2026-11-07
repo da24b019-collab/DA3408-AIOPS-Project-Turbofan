@@ -30,6 +30,7 @@ class Settings:
     max_rows: int = 50_000
     sensors: list = field(default_factory=list)
     window: int = 10
+    experiment_name: str = "turbofan-failure-prediction"
 
     @property
     def features(self) -> list:
@@ -51,4 +52,5 @@ class Settings:
             max_rows=int(os.getenv("MAX_ROWS", "50000")),
             sensors=list(params["features"]["sensors"]),
             window=int(params["features"]["window"]),
+            experiment_name=os.getenv("EXPERIMENT_NAME", params["mlflow"]["experiment_name"]),
         )

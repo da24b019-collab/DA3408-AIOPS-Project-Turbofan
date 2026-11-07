@@ -39,13 +39,16 @@ Readiness: can the service make predictions?
   {"ready": true, "model_loaded": true, "model_version": "6",
    "model_server": "reachable", "model_server_in_sync": true}
   ```
-  `model_server`: `reachable` | `unreachable` | `not_configured`.
+  `model_server`: `reachable` | `unreachable` | `not_configured` | `unknown` (no model loaded yet).
   `model_server_in_sync`: the model server and the backend's copy give identical
   probabilities on a fixed check input (`null` if the server is not reachable).
 - **503** same body with `"ready": false` when no model is loaded, when the model server
   is configured but unreachable (predictions would fail), or when it is out of sync
   (its predictions would not match the threshold and explanations of the loaded version).
   After approving a new champion: restart the model server, then call `/model/reload`.
+- **Self-healing:** if no model is loaded (e.g. the registry was down at start-up), `/ready`
+  and the prediction endpoints retry loading the champion, at most once every 30 seconds.
+  The registry is checked first with a 5-second limit, so the API never hangs on a dead registry.
 
 ### 3.3 `GET /model/info` 🔒
 - **200**
@@ -80,6 +83,38 @@ Predict from an uploaded CSV file (what the dashboard uses).
 - **Request**: `multipart/form-data` with field `file` (a `.csv`, at most `MAX_UPLOAD_MB`).
   Header row required; same columns as 3.5.
 - **200** `PredictionResponse`. **400** not a CSV, empty or too large. **422** validation error. **503** as above.
+
+### 3.7 `GET /pipeline/status` 🔒
+The DVC pipeline for the dashboard's pipeline page.
+- **200**
+  ```json
+  {"stages": [{"name": "features", "command": "python -m src.features.build_features",
+               "status": "up_to_date", "last_run": "2026-11-07T10:30:48+05:30",
+               "metrics": {"total_rows": 265256, "processing_seconds": 17.6,
+                           "rows_per_second": 15075, "spark_startup_seconds": 3.7}}, …],
+   "edges": [["data/raw.dvc", "ingest"], ["ingest", "features"], ["features", "train"]],
+   "dvc_available": true}
+  ```
+  `status`: `up_to_date` | `changed` (inputs changed since the last run, from `dvc status`) |
+  `unknown` (DVC not available). `dvc status` results are cached for 30 seconds.
+
+### 3.8 `GET /pipeline/runs?limit=20` 🔒
+MLflow training runs, newest first, successful and failed (`limit` 1 to 200).
+- **200**
+  ```json
+  {"experiment": "turbofan-failure-prediction",
+   "runs": [{"run_id": "…", "run_name": "xgboost-FD001", "status": "FINISHED",
+             "start_time": "2026-11-07T11:16:30+05:30", "duration_seconds": 31.2,
+             "model_type": "xgboost", "git_commit": "0b9de917d3", "test_recall": 0.8,
+             "test_pr_auc": 0.938, "model_version": "6", "aliases": ["champion"]}, …]}
+  ```
+  `status`: `FINISHED` | `FAILED` | `RUNNING` | `KILLED`.
+- **503** `service_unavailable` when the MLflow tracking server cannot be reached.
+
+### 3.9 `GET /logs/recent?limit=50` 🔒
+Latest WARNING, ERROR and CRITICAL lines from `logs/*.log`, newest first (`limit` 1 to 500).
+- **200** `{"events": [{"time": "2026-11-07 11:40:02,118", "level": "ERROR", "source": "api",
+  "message": "Model unavailable: …", "file": "api.log"}, …]}`
 
 ## 4. PredictionResponse
 
@@ -131,6 +166,7 @@ Every error has the body `{"error": "<code>", "detail": "<human-readable message
 | 401 | `unauthorized` | `API_KEY` is set and `X-API-Key` is missing or wrong |
 | 422 | `invalid_input` | Missing required columns; non-numeric values; missing values; `unit`/`cycle` not positive whole numbers; repeated `(unit, cycle)`; no rows; more than `MAX_ROWS` rows |
 | 503 | `model_unavailable` | No model loaded, or the model server cannot be reached |
+| 503 | `service_unavailable` | Another service an endpoint needs (the MLflow tracking server) cannot be reached |
 | 500 | `internal_error` | Unexpected failure (logged with details; message kept generic) |
 
 ## 6. Internal design (classes and modules)
@@ -139,8 +175,9 @@ Every error has the body `{"error": "<code>", "detail": "<human-readable message
 |---|---|
 | `src/api/settings.py` | `Settings` dataclass built from environment variables and params.yaml |
 | `src/api/engine_data.py` | `read_csv_upload()`, `readings_to_frame()`, `validate_readings()`; raises `InputValidationError` |
-| `src/api/model_service.py` | `ModelService` class: loads the champion from the registry, predicts (through the model server or its own copy), explains with SHAP, checks the model server is in sync |
+| `src/api/model_service.py` | `ModelService` class: loads the champion from the registry (retrying automatically if missing), predicts (through the model server or its own copy), explains with SHAP, checks the model server is in sync |
 | `src/api/prediction.py` | `predict_engines()`: features (shared `compute_features_pandas`) → last cycle per engine → probability → risk level → explanation |
+| `src/api/pipeline_info.py` | `pipeline_status()`, `mlflow_runs()`, `recent_log_events()` for the pipeline page |
 | `src/api/schemas.py` | Pydantic request and response models (this document's sections 3 and 4) |
 | `src/api/main.py` | FastAPI app: routes, API-key check, CORS, request logging, error handlers |
 

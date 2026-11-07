@@ -1,0 +1,20 @@
+# Streamlit settings for the dashboard. Streamlit reads this file when it is
+# started from the frontend/ folder.
+
+[theme]
+base = "light"
+primaryColor = "#1F5FA8"              # buttons, links, active widgets
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F5F9"  # sidebar and input boxes
+textColor = "#1C2733"
+font = "sans serif"
+
+[server]
+maxUploadSize = 5            # MB, same limit as the backend (MAX_UPLOAD_MB)
+headless = true              # do not try to open a browser on the server
+
+[browser]
+gatherUsageStats = false     # do not send usage statistics to Streamlit
+
+[client]
+toolbarMode = "viewer"       # hide developer options such as "Deploy" from operators

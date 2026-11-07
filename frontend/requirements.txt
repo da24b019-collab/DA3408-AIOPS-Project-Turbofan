@@ -1,0 +1,6 @@
+# The dashboard is a separate program from the backend, with its own small
+# set of libraries. It never imports the project's src/ code.
+streamlit>=1.40        # the web dashboard framework
+requests>=2.31         # calls the backend's REST API
+pandas>=2.0,<3.0       # tables
+altair>=5.0            # charts

@@ -87,3 +87,48 @@ class PredictionResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: str
+
+
+class StageInfo(BaseModel):
+    name: str
+    command: str
+    status: Literal["up_to_date", "changed", "unknown"]
+    last_run: Optional[str] = None
+    metrics: dict
+
+
+class PipelineStatusResponse(BaseModel):
+    stages: list[StageInfo]
+    edges: list[list[str]]
+    dvc_available: bool
+
+
+class RunInfo(BaseModel):
+    run_id: str
+    run_name: Optional[str] = None
+    status: str
+    start_time: str
+    duration_seconds: Optional[float] = None
+    model_type: Optional[str] = None
+    git_commit: Optional[str] = None
+    test_recall: Optional[float] = None
+    test_pr_auc: Optional[float] = None
+    model_version: Optional[str] = None
+    aliases: list[str] = []
+
+
+class RunsResponse(BaseModel):
+    experiment: str
+    runs: list[RunInfo]
+
+
+class LogEvent(BaseModel):
+    time: str
+    level: str
+    source: str
+    message: str
+    file: str
+
+
+class LogEventsResponse(BaseModel):
+    events: list[LogEvent]
