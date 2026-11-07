@@ -92,7 +92,7 @@ def render() -> None:
         alerts = client.recent_alerts(limit=20)["alerts"]
         if alerts:
             st.dataframe(pd.DataFrame(alerts)[["received_at", "alertname", "status",
-                                               "severity", "summary"]],
+                                               "severity", "summary", "action"]],
                          hide_index=True, width="stretch")
         else:
             st.success("No alerts received since the backend started.")
