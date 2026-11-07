@@ -21,3 +21,6 @@ Thumbs.db
 
 # Scratch space (Spark temporary files)
 tmp/
+
+# MLflow tracking server storage (database and artifacts)
+mlflow_data/

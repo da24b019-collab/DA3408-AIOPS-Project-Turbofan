@@ -37,3 +37,23 @@ stages:
     metrics:
       - reports/features_report.json:
           cache: false
+
+  train:
+    # Needs the MLflow server running (see README). Logs the run to MLflow,
+    # registers a new model version as "challenger", and keeps a local copy.
+    cmd: python -m src.models.train
+    deps:
+      - src/models/train.py
+      - src/models/evaluate.py
+      - src/models/tracking.py
+      - src/features/feature_logic.py
+      - data/features
+    params:
+      - train
+      - features.sensors
+      - features.window
+    outs:
+      - models/latest
+    metrics:
+      - reports/train_metrics.json:
+          cache: false

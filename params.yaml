@@ -30,3 +30,25 @@ spark:
   driver_memory: 4g        # memory for Spark (laptop has 14 GB in total)
   shuffle_partitions: 12   # how many pieces to split work into (= CPU cores)
   local_dir: tmp/spark     # Spark scratch space, kept on the project drive
+
+train:
+  input_dir: data/features
+  subset: FD001                 # train on FD001 only; other subsets are for the drift demo
+  model_type: xgboost           # xgboost | random_forest | logistic_regression
+  n_splits: 5                   # GroupKFold folds (split by engine, never by row)
+  target_recall: 0.90           # pick the threshold that catches at least 90% of failures
+  random_state: 42
+  xgboost:
+    n_estimators: 300
+    max_depth: 4
+    learning_rate: 0.05
+  random_forest:
+    n_estimators: 200
+    min_samples_leaf: 5
+  logistic_regression:
+    C: 1.0
+
+mlflow:
+  tracking_uri: http://127.0.0.1:5000
+  experiment_name: turbofan-failure-prediction
+  registered_model_name: turbofan-failure-classifier

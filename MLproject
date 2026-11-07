@@ -1,0 +1,36 @@
+# MLproject: tells MLflow how to run this project and in which environment.
+#
+# python_env.yaml pins the Python version and installs requirements.txt.
+# Running with --env-manager virtualenv makes MLflow build a fresh, isolated
+# environment from it, so a teammate or examiner gets the same environment
+# the developer used (dev/test parity). --env-manager local reuses the
+# currently active .venv, which is faster for day-to-day work.
+#
+# Examples (MLflow server must be running):
+#   mlflow run . -e train -P model_type=random_forest --env-manager local \
+#       --experiment-name turbofan-failure-prediction
+#   mlflow run . -e main --env-manager local --experiment-name turbofan-failure-prediction
+
+name: turbofan-pdm
+
+python_env: python_env.yaml
+
+entry_points:
+  ingest:
+    command: "python -m src.data.ingest"
+
+  features:
+    command: "python -m src.features.build_features"
+
+  train:
+    parameters:
+      model_type: {type: string, default: xgboost}
+    command: "python -m src.models.train --model-type {model_type}"
+
+  main:
+    parameters:
+      model_type: {type: string, default: xgboost}
+    command: >-
+      python -m src.data.ingest &&
+      python -m src.features.build_features &&
+      python -m src.models.train --model-type {model_type}
