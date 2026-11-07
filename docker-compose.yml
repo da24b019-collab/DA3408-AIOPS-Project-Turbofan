@@ -265,7 +265,7 @@ services:
       - prometheus
     ports:
       - "127.0.0.1:3000:3000"
-    mem_limit: 512m
+    mem_limit: 768m   # 512m was too tight: ContainerMemoryHigh fired on 2026-11-07
 
 # Named volumes: Docker-managed storage that survives `docker compose down`
 # (removed only with `docker compose down -v`).
