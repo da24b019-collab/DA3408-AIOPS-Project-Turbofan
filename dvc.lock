@@ -89,3 +89,71 @@ stages:
       hash: md5
       md5: 9b8bf1b652f2b62c5896e56ee7521d8a
       size: 760
+  train:
+    cmd: python -m src.models.train
+    deps:
+    - path: data/features
+      hash: md5
+      md5: 8477e83ff8ef12187253eca46c0f2562.dir
+      size: 55354432
+      nfiles: 32
+    - path: src/features/feature_logic.py
+      hash: md5
+      md5: 28b4d67851a09ee7eb1ead64045fff6d
+      size: 2516
+    - path: src/models/evaluate.py
+      hash: md5
+      md5: bb1a0c1524105e6f0e79687ca20e679b
+      size: 3267
+    - path: src/models/tracking.py
+      hash: md5
+      md5: a6776bfdd4c2cfc34ae6d1321a9f12e9
+      size: 2360
+    - path: src/models/train.py
+      hash: md5
+      md5: 78b10b1c0963bfac8f95b06174e69d0d
+      size: 14666
+    params:
+      params.yaml:
+        features.sensors:
+        - s2
+        - s3
+        - s4
+        - s7
+        - s8
+        - s9
+        - s11
+        - s12
+        - s13
+        - s14
+        - s15
+        - s17
+        - s20
+        - s21
+        features.window: 10
+        train:
+          input_dir: data/features
+          subset: FD001
+          model_type: xgboost
+          n_splits: 5
+          target_recall: 0.9
+          random_state: 42
+          xgboost:
+            n_estimators: 300
+            max_depth: 4
+            learning_rate: 0.05
+          random_forest:
+            n_estimators: 200
+            min_samples_leaf: 5
+          logistic_regression:
+            C: 1.0
+    outs:
+    - path: models/latest
+      hash: md5
+      md5: ff0dd1054aa49ff1ec64b1a98a6c4c05.dir
+      size: 494399
+      nfiles: 5
+    - path: reports/train_metrics.json
+      hash: md5
+      md5: f999e221a93f98dcf83cc4a5c5268d13
+      size: 703
