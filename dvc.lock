@@ -82,19 +82,19 @@ stages:
     outs:
     - path: data/features
       hash: md5
-      md5: 8477e83ff8ef12187253eca46c0f2562.dir
+      md5: 4607db0cc074776513a148f639753000.dir
       size: 55354432
       nfiles: 32
     - path: reports/features_report.json
       hash: md5
-      md5: 9b8bf1b652f2b62c5896e56ee7521d8a
-      size: 760
+      md5: d0b334774b5e5b7d0a71e9c222751fa5
+      size: 758
   train:
     cmd: python -m src.models.train
     deps:
     - path: data/features
       hash: md5
-      md5: 8477e83ff8ef12187253eca46c0f2562.dir
+      md5: 4607db0cc074776513a148f639753000.dir
       size: 55354432
       nfiles: 32
     - path: src/features/feature_logic.py
@@ -150,10 +150,10 @@ stages:
     outs:
     - path: models/latest
       hash: md5
-      md5: ff0dd1054aa49ff1ec64b1a98a6c4c05.dir
+      md5: f495b75ce9ff60d2b7f04915766ffeea.dir
       size: 494399
       nfiles: 5
     - path: reports/train_metrics.json
       hash: md5
-      md5: f999e221a93f98dcf83cc4a5c5268d13
+      md5: c77686d12c7e286ca5baf0c250227704
       size: 703
