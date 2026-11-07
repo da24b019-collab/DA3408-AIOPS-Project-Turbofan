@@ -24,3 +24,6 @@ tmp/
 
 # MLflow tracking server storage (database and artifacts)
 mlflow_data/
+
+# Docker Compose settings (contains the API key)
+.env

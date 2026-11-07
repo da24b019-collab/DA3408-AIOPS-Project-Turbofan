@@ -1,0 +1,5 @@
+# Exact versions for the frontend image (requirements.txt lists the minimums).
+streamlit==1.67.0
+requests==2.34.2
+pandas==2.3.3
+altair==6.3.0

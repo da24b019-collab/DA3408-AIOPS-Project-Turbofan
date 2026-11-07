@@ -9,8 +9,9 @@ container name, so only MODEL_SERVER_URL changes, not the code.
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from src.config import load_params
+from src.config import PROJECT_ROOT, load_params
 from src.features.feature_logic import feature_names
 
 
@@ -31,6 +32,9 @@ class Settings:
     sensors: list = field(default_factory=list)
     window: int = 10
     experiment_name: str = "turbofan-failure-prediction"
+    # Where dvc.yaml, reports/ and the DVC data live. In Docker the code is in
+    # the image (/app) while the project folder is mounted at /project.
+    project_dir: Path = PROJECT_ROOT
 
     @property
     def features(self) -> list:
@@ -53,4 +57,5 @@ class Settings:
             sensors=list(params["features"]["sensors"]),
             window=int(params["features"]["window"]),
             experiment_name=os.getenv("EXPERIMENT_NAME", params["mlflow"]["experiment_name"]),
+            project_dir=Path(os.getenv("PROJECT_DIR", PROJECT_ROOT)),
         )

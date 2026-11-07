@@ -47,7 +47,6 @@ from src.api.schemas import (
     RunsResponse,
 )
 from src.api.settings import Settings
-from src.config import PROJECT_ROOT
 from src.models.tracking import check_mlflow_server
 from src.logger import LOG_DIR, get_logger
 
@@ -200,7 +199,7 @@ def create_app(settings: Settings = None, service: ModelService = None) -> FastA
     @app.get("/pipeline/status", response_model=PipelineStatusResponse, tags=["pipeline"],
              dependencies=protected, responses=ERROR_RESPONSES)
     def get_pipeline_status():
-        return pipeline_status(PROJECT_ROOT)
+        return pipeline_status(settings.project_dir)
 
     @app.get("/pipeline/runs", response_model=RunsResponse, tags=["pipeline"],
              dependencies=protected, responses=ERROR_RESPONSES)

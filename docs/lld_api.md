@@ -23,6 +23,9 @@ The backend talks to the model server through a configurable URL (`MODEL_SERVER_
 | `CORS_ORIGINS` | `http://localhost:8501,http://localhost:3000` | Comma-separated origins allowed to call the API from a browser (the dashboard) |
 | `MAX_UPLOAD_MB` | `5` | Largest accepted CSV |
 | `MAX_ROWS` | `50000` | Largest accepted number of readings per request |
+| `PROJECT_DIR` | the project root | Folder holding `dvc.yaml`, `reports/` and the DVC data, for `/pipeline/status` (in Docker: `/project`) |
+| `LOG_DIR` | `<project>/logs` | Where log files are written and read by `/logs/recent` |
+| `EXPERIMENT_NAME` | `turbofan-failure-prediction` (params.yaml) | MLflow experiment shown by `/pipeline/runs` |
 
 ## 3. Endpoints
 

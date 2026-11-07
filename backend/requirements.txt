@@ -1,0 +1,17 @@
+# Libraries for the backend image (used by the mlflow, model-server and backend
+# containers). Versions are pinned EXACTLY (==) to the ones that trained the
+# model on the development laptop: a model saved with one scikit-learn or
+# XGBoost version may fail, or behave differently, when loaded with another.
+# Spark, Jupyter and pytest are not needed at run time, so they are left out.
+pandas==2.3.3
+numpy==2.5.4
+pyarrow==26.0.0
+pyyaml==6.0.3
+scikit-learn==1.9.1
+xgboost==3.4.1
+mlflow==3.18.0
+shap==0.54.1
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.33
+dvc==3.67.1             # lets /pipeline/status run `dvc status`

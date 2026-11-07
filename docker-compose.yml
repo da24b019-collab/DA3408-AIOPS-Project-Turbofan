@@ -1,0 +1,143 @@
+# docker-compose.yml: the whole application, started with one command:
+#     docker compose up -d
+#
+#   browser ──> frontend (8501) ──REST──> backend (8000) ──> model-server (5001)
+#                                             │                    │
+#                                             └──────> mlflow (5000) <┘   (model registry)
+#
+# Inside Docker's private network, containers reach each other BY NAME
+# (http://backend:8000, http://mlflow:5000). Ports are published only on
+# 127.0.0.1, so the services are reachable from this laptop but not from
+# other machines on the network.
+#
+# Settings that differ per machine (user id, API key, Docker Hub account)
+# come from the .env file next to this one (see .env.example).
+
+name: turbofan-pdm
+
+x-backend-image: &backend-image
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  image: ${DOCKERHUB_USER:-local}/turbofan-backend:${IMAGE_TAG:-latest}
+  # Run as the laptop user, so files the containers write into the mounted
+  # project folder (logs, MLflow data) belong to that user, not to root.
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  restart: unless-stopped
+  # Use the laptop's time zone, so container logs show the same clock time as
+  # everything else (Docker containers use UTC by default).
+  volumes:
+    - /etc/localtime:/etc/localtime:ro
+
+services:
+
+  mlflow:
+    <<: *backend-image
+    container_name: turbofan-mlflow
+    working_dir: /project
+    environment:
+      # MLflow 3 also starts a background job runner (for its GenAI features),
+      # with worker processes for every CPU core: 2.7 GB on a 2-core test machine
+      # and killed for exceeding 1 GB on a 12-core laptop. This project uses no
+      # MLflow jobs, so it is switched off: the server then needs about 300 MB.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:////project/mlflow_data/mlflow.db
+      --artifacts-destination /project/mlflow_data/artifacts
+      --host 0.0.0.0 --port 5000 --workers 2
+      --allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./mlflow_data:/project/mlflow_data
+    ports:
+      - "127.0.0.1:5000:5000"
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  model-server:
+    <<: *backend-image
+    container_name: turbofan-model-server
+    # Serves whichever registry version holds the alias "champion" at start-up.
+    # After approving a new champion: docker compose restart model-server
+    command: >
+      mlflow models serve
+      -m models:/turbofan-failure-classifier@champion
+      -h 0.0.0.0 -p 5001 --env-manager local
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5001:5001"
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/ping', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend:
+    <<: *backend-image
+    container_name: turbofan-backend
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_SERVER_URL: http://model-server:5001
+      API_KEY: ${API_KEY:-}
+      CORS_ORIGINS: http://localhost:8501,http://127.0.0.1:8501
+      PROJECT_DIR: /project
+      LOG_DIR: /project/logs
+    volumes:
+      # The project folder, for /pipeline/status (dvc.yaml, reports, DVC data)
+      # and for the log files shown on the dashboard's error console.
+      - /etc/localtime:/etc/localtime:ro
+      - .:/project
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      model-server:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: ${DOCKERHUB_USER:-local}/turbofan-frontend:${IMAGE_TAG:-latest}
+    container_name: turbofan-frontend
+    restart: unless-stopped
+    environment:
+      # Server-side address: the dashboard container calls the backend by name
+      BACKEND_URL: http://backend:8000
+      API_KEY: ${API_KEY:-}
+      # Browser-side addresses: links the operator clicks open on this laptop
+      MLFLOW_UI_URL: http://localhost:5000
+      GRAFANA_URL: http://localhost:3000
+      SPARK_UI_URL: http://localhost:4040
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8501:8501"
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
