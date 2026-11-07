@@ -1,0 +1,20 @@
+[
+  {
+    "model": "xgboost",
+    "size_kb": 465,
+    "predict_one_engine_ms": 2.9,
+    "shap_one_row_ms": 3.7
+  },
+  {
+    "model": "random_forest",
+    "size_kb": 8113,
+    "predict_one_engine_ms": 65.9,
+    "shap_one_row_ms": 23.6
+  },
+  {
+    "model": "logistic_regression",
+    "size_kb": 3,
+    "predict_one_engine_ms": 2.5,
+    "shap_one_row_ms": 0.0
+  }
+]
