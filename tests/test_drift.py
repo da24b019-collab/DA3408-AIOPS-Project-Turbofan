@@ -79,3 +79,21 @@ def test_new_baseline_empties_the_window():
     monitor.set_baseline(build_baseline(normal_data(1000), SENSORS), "8")
     assert monitor.status()["n_rows"] == 0
     assert monitor.status()["baseline_model_version"] == "8"
+
+
+def test_closest_of_several_baselines_is_used():
+    # Model trained on two datasets: one around 100, one around 110
+    baselines = {"A": build_baseline(normal_data(5000, 0.0, seed=1), SENSORS),
+                 "B": build_baseline(normal_data(5000, 10.0, seed=2), SENSORS)}
+    monitor = DriftMonitor(SENSORS, threshold=1.0, min_rows=100, window_rows=500)
+    monitor.set_baseline(baselines, "8")
+    monitor.add(normal_data(500, 10.0, seed=3))      # looks like B only
+    status = monitor.status()
+    assert status["state"] == "ok" and status["closest_baseline"] == "B"
+    assert status["baselines"] == ["A", "B"]
+
+
+def test_old_single_baseline_format_still_works():
+    monitor = DriftMonitor(SENSORS, min_rows=10, window_rows=100)
+    monitor.set_baseline(build_baseline(normal_data(1000), SENSORS), "7")   # pre-Task 9 format
+    assert monitor.status()["baselines"] == ["training"]

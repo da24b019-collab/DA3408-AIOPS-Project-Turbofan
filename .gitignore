@@ -27,3 +27,6 @@ mlflow_data/
 
 # Docker Compose settings (contains the API key)
 .env
+
+# Retraining job queue written by the backend (Task 9)
+/retraining/

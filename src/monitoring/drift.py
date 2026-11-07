@@ -17,7 +17,13 @@ How PSI works, for one sensor:
        Readings piled into a few bins -> large PSI.
 
 We compute PSI for each of the 14 sensors and raise a drift flag when the
-HIGHEST one goes above the threshold. Threshold 1.0, minimum 500 rows and
+HIGHEST one goes above the threshold.
+
+A model trained on SEVERAL datasets (e.g. FD001 and FD002, after a retrain)
+gets one baseline per dataset. New data counts as "known" when it looks like
+AT LEAST ONE of them, so the drift score is the score against the closest
+baseline. (One baseline of all data mixed together would wrongly call pure
+FD001 data "drifted", because FD001 alone fills only some of the mixed bins.) Threshold 1.0, minimum 500 rows and
 a 1,000-row window were chosen from measurements, not from the textbook
 0.25 (see docs/monitoring_findings.md and experiments/drift_threshold_study.py).
 """
@@ -69,6 +75,17 @@ def psi(expected, actual) -> float:
     return float(np.sum((actual - expected) * np.log(actual / expected)))
 
 
+def as_named_baselines(saved: dict) -> dict:
+    """
+    Baselines are saved as {"FD001": {sensor: bins}, "FD002": {...}}.
+    Models trained before Task 9 saved a single {sensor: bins}: wrap it.
+    """
+    first = next(iter(saved.values()))
+    if "edges" in first:                      # old format: keys are sensors
+        return {"training": saved}
+    return saved
+
+
 def psi_per_sensor(baseline: dict, readings: pd.DataFrame) -> dict:
     """PSI of every sensor in the baseline for a batch of readings."""
     return {sensor: psi(b["expected"], bin_fractions(readings[sensor].to_numpy(float), b["edges"]))
@@ -91,7 +108,7 @@ class DriftMonitor:
         self.sensors = list(sensors)
         self.threshold = threshold
         self.min_rows = min_rows
-        self.baseline = None                    # set by set_baseline()
+        self.baselines = None                   # {name: baseline}, set by set_baseline()
         self.baseline_version = None            # model version the baseline came from
         self._rows = deque(maxlen=window_rows)  # oldest rows fall out automatically
         self._lock = threading.Lock()
@@ -107,7 +124,8 @@ class DriftMonitor:
         decide whether the new model sees drift.
         """
         with self._lock:
-            self.baseline = {s: baseline[s] for s in self.sensors if s in baseline}
+            self.baselines = {name: {s: b[s] for s in self.sensors if s in b}
+                              for name, b in as_named_baselines(baseline).items()}
             self.baseline_version = model_version
             self._rows.clear()
 
@@ -135,19 +153,24 @@ class DriftMonitor:
                   "window_rows": self.window_rows, "threshold": self.threshold,
                   "baseline_model_version": self.baseline_version,
                   "max_psi": None, "worst_sensor": None, "drift_detected": False,
+                  "closest_baseline": None,
+                  "baselines": sorted(self.baselines) if self.baselines else [],
                   "sensor_psi": {}}
-        if self.baseline is None:
+        if self.baselines is None:
             return result
         if n_rows < self.min_rows:
             result["state"] = "collecting"
             return result
 
         frame = pd.DataFrame(rows, columns=self.sensors)
-        scores = psi_per_sensor(self.baseline, frame)
+        # Score against every baseline; keep the one the data looks most like
+        all_scores = {name: psi_per_sensor(b, frame) for name, b in self.baselines.items()}
+        closest = min(all_scores, key=lambda name: max(all_scores[name].values()))
+        scores = all_scores[closest]
         worst = max(scores, key=scores.get)
         drift = scores[worst] > self.threshold
         result.update({"state": "drift" if drift else "ok",
                        "max_psi": round(scores[worst], 4), "worst_sensor": worst,
-                       "drift_detected": drift,
+                       "drift_detected": drift, "closest_baseline": closest,
                        "sensor_psi": {s: round(v, 4) for s, v in scores.items()}})
         return result

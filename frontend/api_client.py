@@ -92,3 +92,22 @@ class ApiClient:
 
     def recent_alerts(self, limit: int = 20) -> dict:
         return self._request("GET", "/alerts/recent", params={"limit": limit})
+
+    # ---- retraining loop (Task 9) ----
+    def jobs(self, limit: int = 20) -> dict:
+        return self._request("GET", "/jobs", params={"limit": limit})
+
+    def retrain(self, subsets: list, reason: str) -> dict:
+        return self._request("POST", "/retrain", json={"subsets": subsets, "reason": reason})
+
+    def model_versions(self) -> dict:
+        return self._request("GET", "/model/versions")
+
+    def compare_models(self) -> dict:
+        return self._request("GET", "/model/compare")
+
+    def approve(self) -> dict:
+        return self._request("POST", "/model/approve")
+
+    def rollback(self, version: str) -> dict:
+        return self._request("POST", "/model/rollback", json={"version": version})

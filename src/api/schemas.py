@@ -146,6 +146,8 @@ class DriftStatusResponse(BaseModel):
     max_psi: Optional[float] = None
     worst_sensor: Optional[str] = None
     drift_detected: bool
+    closest_baseline: Optional[str] = None   # training dataset the data looks most like
+    baselines: list[str] = []                # datasets the served model was trained on
     sensor_psi: dict[str, float]
 
 
@@ -170,7 +172,78 @@ class ReceivedAlert(BaseModel):
     status: str
     severity: str
     summary: str
+    action: str = ""             # what the backend did about it (e.g. "retrain job 3 queued")
 
 
 class AlertsResponse(BaseModel):
     alerts: list[ReceivedAlert]
+
+
+# ------------------------------------------------------------ retraining (Task 9)
+class Job(BaseModel):
+    """A retraining or deploy job (src/api/jobs.py)."""
+    id: int
+    kind: Literal["retrain", "deploy"]
+    status: Literal["queued", "running", "succeeded", "failed"]
+    reason: str
+    params: dict
+    created_at: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    detail: str = ""
+    result: dict = {}
+
+
+class JobsResponse(BaseModel):
+    jobs: list[Job]
+
+
+class ClaimResponse(BaseModel):
+    job: Optional[Job] = None    # null when there is no work
+
+
+class RetrainRequest(BaseModel):
+    subsets: Optional[list[Literal["FD001", "FD002", "FD003", "FD004"]]] = None  # default: params.yaml
+    reason: str = "Requested from the dashboard"
+
+
+class FinishJobRequest(BaseModel):
+    succeeded: bool
+    detail: str = ""
+    result: dict = {}
+
+
+class Check(BaseModel):
+    name: str
+    passed: bool
+    detail: str
+
+
+class CompareResponse(BaseModel):
+    """Champion and challenger scored on the same NASA test sets."""
+    champion_version: str
+    challenger_version: str
+    scores: dict[str, dict[str, dict[str, float]]]   # role -> subset -> metric -> value
+    checks: list[Check]
+    approvable: bool
+
+
+class RollbackRequest(BaseModel):
+    version: str
+
+
+class DeployResponse(BaseModel):
+    champion_version: str
+    job: Job
+
+
+class ModelVersion(BaseModel):
+    version: str
+    aliases: list[str]
+    train_subsets: str
+    test_recall: Optional[str] = None
+    created: int
+
+
+class VersionsResponse(BaseModel):
+    versions: list[ModelVersion]

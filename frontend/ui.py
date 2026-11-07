@@ -62,6 +62,8 @@ def show_api_error(err) -> None:
         "service_unavailable": "A supporting service is down. Try again in a minute.",
         "connection_error": "The prediction service is not running or not reachable.",
         "unauthorized": "The dashboard's API key does not match the backend's.",
+        "conflict": "This action is not possible right now (see the message above).",
+        "not_found": "That item does not exist. Refresh the page.",
     }
     st.error(str(err))
     if err.code in hints:

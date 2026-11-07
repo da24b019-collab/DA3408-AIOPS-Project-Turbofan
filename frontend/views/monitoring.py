@@ -45,6 +45,14 @@ def psi_table(status: dict) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("PSI", ascending=False, ignore_index=True)
 
 
+def jobs_table(job_list: list) -> pd.DataFrame:
+    """The columns an operator needs, newest job first."""
+    rows = [{"Job": j["id"], "Kind": j["kind"], "Status": j["status"], "Reason": j["reason"],
+             "Created": j["created_at"].replace("T", " ")[:19],
+             "Result": j["detail"] or "-"} for j in job_list]
+    return pd.DataFrame(rows)
+
+
 def render() -> None:
     st.title("Monitoring")
     st.markdown("Checks that the sensor data arriving now still looks like the data the "
@@ -90,5 +98,27 @@ def render() -> None:
             st.success("No alerts received since the backend started.")
     except ApiError as err:
         show_api_error(err)
+
+    # ---- retraining ----
+    st.subheader("Retraining jobs")
+    st.caption("A DataDrift alert queues a retraining job automatically. The retraining worker "
+               "on the server trains a new model, which then waits for approval on the Model page.")
+    try:
+        job_list = client.jobs(limit=10)["jobs"]
+        if job_list:
+            st.dataframe(jobs_table(job_list), hide_index=True, width="stretch")
+        else:
+            st.info("No retraining or deploy jobs yet.")
+    except ApiError as err:
+        show_api_error(err)
+    with st.expander("Start a retraining job by hand"):
+        subsets = st.multiselect("Train on", ["FD001", "FD002", "FD003", "FD004"],
+                                 default=["FD001", "FD002"])
+        if st.button("Queue retraining job", disabled=not subsets):
+            try:
+                job = client.retrain(subsets, "Requested from the dashboard")["jobs"][0]
+                st.success(f"Retrain job {job['id']} queued.")
+            except ApiError as err:
+                show_api_error(err)
 
     st.link_button("Open the live graphs in Grafana", GRAFANA_URL)

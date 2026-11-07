@@ -80,6 +80,14 @@ ALERTS_RECEIVED = Counter(
     ["alertname", "status"])
 
 
+# ------------------------------------------------------- retraining (Task 9)
+JOBS_CREATED = Counter("pdm_jobs_created_total", "Retrain and deploy jobs created",
+                       ["kind", "trigger"])
+JOBS_FINISHED = Counter("pdm_jobs_finished_total", "Jobs finished, by outcome",
+                        ["kind", "status"])
+JOBS_OPEN = Gauge("pdm_jobs_open", "Jobs queued or running", ["kind"])
+
+
 def route_label(request) -> str:
     """
     The path TEMPLATE (e.g. "/predict"), not the raw URL. Unknown URLs are

@@ -9,6 +9,7 @@
 | MLflow tracking server | 5000 | Model registry. The backend reads the champion's version, threshold, feature list and drift baseline from it. |
 | Prometheus | 9090 | Reads the backend's `/metrics` every 15 s and evaluates the alert rules. |
 | Alertmanager | 9093 | Sends fired and resolved alerts to the backend's `/alerts/webhook`. |
+| Retraining worker (`src/retraining/worker.py`) | none | Runs on the laptop. Claims queued jobs from the backend: retrains with DVC, or restarts the model server after an approval. |
 
 The frontend talks **only** to the FastAPI backend, through REST calls to a configurable base URL.
 The backend talks to the model server through a configurable URL (`MODEL_SERVER_URL`).
@@ -177,6 +178,30 @@ Alerts received, newest first (`limit` 1 to 50).
 - **200** `{"alerts": [{"received_at": "2026-11-07T13:34:02+05:30", "alertname": "DataDrift",
   "status": "firing", "severity": "warning", "summary": "Incoming sensor data has drifted …"}]}`
 
+### 3.15 Retraining loop (Task 9) 🔒
+A `Job` is `{"id", "kind": "retrain"|"deploy", "status": "queued"|"running"|"succeeded"|"failed",
+"reason", "params", "created_at", "started_at", "finished_at", "detail", "result"}`.
+Jobs are stored in `<project>/retraining/jobs.json`. See `docs/retraining.md` for the flow.
+
+| Endpoint | Body | Answer | Errors |
+|---|---|---|---|
+| `POST /retrain` | `{"subsets": ["FD001","FD002"], "reason": "…"}` (both optional) | `{"jobs": [Job]}` | 409 if a retrain job is already queued or running |
+| `GET /jobs?limit=20` | | `{"jobs": [Job, …]}` newest first | |
+| `POST /jobs/claim` | | `{"job": Job}` now running, or `{"job": null}` | |
+| `POST /jobs/{id}/finish` | `{"succeeded": true, "detail": "…", "result": {…}}` | `{"jobs": [Job]}` | 404 unknown job; 409 job not running |
+| `GET /model/versions` | | `{"versions": [{"version", "aliases", "train_subsets", "test_recall", "created"}]}` | 503 registry down |
+| `GET /model/compare` | | `{"champion_version", "challenger_version", "scores": {role: {subset: {recall, precision, pr_auc, …}}}, "checks": [{name, passed, detail}], "approvable"}` | 503 registry down or no challenger |
+| `POST /model/approve` | | `{"champion_version", "job": Job}` (a deploy job) | 409 a check failed, already champion, or a deploy job is open |
+| `POST /model/rollback` | `{"version": "7"}` | `{"champion_version", "job": Job}` | 404 unknown version; 409 already champion or a deploy job is open |
+
+A firing `DataDrift` alert received on `/alerts/webhook` queues a retrain job on
+`retraining.subsets_on_drift`, unless a retrain job is open or one was created within
+`retraining.cooldown_minutes`. The alert row in `/alerts/recent` gets an `action` field saying
+which happened. `/drift/status` also returns `closest_baseline` and `baselines`.
+
+New metrics: `pdm_jobs_created_total{kind,trigger}`, `pdm_jobs_finished_total{kind,status}`,
+`pdm_jobs_open{kind}`.
+
 ## 4. PredictionResponse
 
 ```json
@@ -227,6 +252,8 @@ Every error has the body `{"error": "<code>", "detail": "<human-readable message
 | 401 | `unauthorized` | `API_KEY` is set and `X-API-Key` is missing or wrong |
 | 422 | `invalid_input` | Missing required columns; non-numeric values; missing values; `unit`/`cycle` not positive whole numbers; repeated `(unit, cycle)`; no rows; more than `MAX_ROWS` rows |
 | 503 | `model_unavailable` | No model loaded, or the model server cannot be reached |
+| 404 | `not_found` | Unknown job id or model version |
+| 409 | `conflict` | Valid request not allowed in the current state (approval check failed, job already open, version already champion) |
 | 503 | `service_unavailable` | Another service an endpoint needs (the MLflow tracking server) cannot be reached |
 | 500 | `internal_error` | Unexpected failure (logged with details; message kept generic) |
 
@@ -243,10 +270,14 @@ Every error has the body `{"error": "<code>", "detail": "<human-readable message
 | `src/api/metrics.py` | Prometheus metric definitions, `route_label()`, `record_predictions()`, `update_state_gauges()` |
 | `src/monitoring/drift.py` | `build_baseline()`, `bin_fractions()`, `psi()`, `psi_per_sensor()`; `DriftMonitor` class (sliding window of readings, thread-safe) |
 | `src/monitoring/pipeline_metrics.py` | `push_stage_metrics()`: DVC stages push run time, success and results to the Pushgateway |
+| `src/api/jobs.py` | `JobStore` class: the job queue in a JSON file (create, claim, finish, cooldown) |
+| `src/api/registry.py` | `Registry` class: alias lookups, version list, comparison (cached), setting the champion |
+| `src/models/compare.py` | `evaluate_on_test_sets()`, `promotion_checks()` (the approval gate), `compare_versions()`; also used by `promote.py` |
+| `src/retraining/worker.py` | The worker: `do_retrain()`, `do_deploy()`, `set_train_subsets()` |
 | `src/api/main.py` | FastAPI app: routes, API-key check, CORS, request logging and metrics, error handlers |
 
 Paradigm: functional modules for data handling and features (`engine_data`, `prediction`, `feature_logic`);
-classes where state must be kept (`Settings`, `ModelService`, `DriftMonitor`).
+classes where state must be kept (`Settings`, `ModelService`, `DriftMonitor`, `JobStore`, `Registry`).
 
 The drift baseline is saved by `train.py` as `drift/baseline.json` in the model's MLflow run.
 `ModelService.load()` reads it with the model, so each model version is compared with its own

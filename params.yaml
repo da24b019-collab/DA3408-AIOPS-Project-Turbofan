@@ -33,7 +33,9 @@ spark:
 
 train:
   input_dir: data/features
-  subset: FD001                 # train on FD001 only; other subsets are for the drift demo
+  # Datasets to train on. FD001 = one flight condition. A retraining job
+  # (Task 9) may add FD002 when data from six flight conditions starts arriving.
+  subsets: [FD001]
   model_type: xgboost           # xgboost | random_forest | logistic_regression
   n_splits: 5                   # GroupKFold folds (split by engine, never by row)
   target_recall: 0.90           # pick the threshold that catches at least 90% of failures
@@ -67,3 +69,13 @@ monitoring:
   min_rows: 3000           # below this PSI is unreliable (normal data reaches 4.0)
   window_rows: 5000        # PSI is computed on the most recent 5000 readings
   pushgateway_url: http://127.0.0.1:9091   # where pipeline jobs push their metrics
+
+retraining:
+  # What a DataDrift alert starts: a retraining job on these datasets. In a real
+  # fleet this would be newly collected, labelled run-to-failure data from the
+  # new conditions; here the FD002 training set plays that role.
+  subsets_on_drift: [FD001, FD002]
+  cooldown_minutes: 30        # at most one automatic retrain job per 30 minutes
+  # Approval gate: the challenger must not be worse than the champion on the
+  # original task (FD001 test engines) by more than this.
+  max_fd001_drop: 0.05        # in recall and in PR-AUC

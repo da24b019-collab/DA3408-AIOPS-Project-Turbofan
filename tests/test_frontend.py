@@ -83,3 +83,18 @@ def test_psi_table_sorted_with_verdicts():
     table = psi_table(drift_status("drift", 4.6, {"s2": 0.3, "s17": 4.6, "s11": 1.2}))
     assert list(table["Sensor"]) == ["s17", "s11", "s2"]
     assert list(table["Verdict"]) == ["drifted", "drifted", "stable"]
+
+
+def test_comparison_table_has_one_row_per_test_set():
+    from views.model import comparison_table
+    def s(r): return {sub: {"recall": r, "pr_auc": r} for sub in ["FD001", "FD002", "FD003", "FD004"]}
+    table = comparison_table({"scores": {"champion": s(0.8), "challenger": s(0.9)}})
+    assert len(table) == 4 and table["Recall (challenger)"].iloc[0] == 0.9
+
+
+def test_jobs_table_columns():
+    from views.monitoring import jobs_table
+    table = jobs_table([{"id": 1, "kind": "retrain", "status": "queued", "reason": "DataDrift alert",
+                         "created_at": "2026-11-07T16:16:58+05:30", "detail": ""}])
+    assert list(table.columns) == ["Job", "Kind", "Status", "Reason", "Created", "Result"]
+    assert table["Created"].iloc[0] == "2026-11-07 16:16:58"

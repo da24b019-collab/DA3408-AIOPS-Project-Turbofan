@@ -2,7 +2,8 @@
 Stage 3 of the pipeline: train a model and track everything in MLflow.
 
 Steps:
-    1. Load the Spark features for the training subset (FD001).
+    1. Load the Spark features for the training subsets (params.yaml,
+       train.subsets: FD001 at first; a retraining job may add FD002).
     2. Validate with GroupKFold: each engine is entirely in train or in
        validation, never both (a random row split leaks, as measured earlier).
     3. Choose the decision threshold on the validation predictions so that
@@ -11,8 +12,8 @@ Steps:
     5. Evaluate on the official NASA test set (last cycle of each engine).
     6. Log to MLflow: parameters, metrics, plots, SHAP explanation, the Git
        commit, the DVC data version and the dataset itself. Also the drift
-       baseline: how the training readings of each sensor are spread out,
-       which the API later compares new readings against.
+       baseline: how the training readings of each sensor are spread out
+       (one baseline per subset), which the API compares new readings against.
     7. Register the model as a new version with the alias "challenger".
        A human later promotes it to "champion" (src/models/promote.py).
 
@@ -53,6 +54,7 @@ from src.models.evaluate import (
     plot_confusion_matrix,
     plot_pr_curve,
 )
+from src.models.compare import evaluate_on_test_sets
 from src.models.tracking import check_mlflow_server, dvc_output_hash, git_commit, git_is_dirty
 from src.monitoring.drift import build_baseline
 from src.monitoring.pipeline_metrics import push_stage_metrics
@@ -176,28 +178,35 @@ def main(model_type_override: str | None = None) -> dict:
     mlflow.set_experiment(mcfg["experiment_name"])
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
-    train = load_split(tcfg["input_dir"], "train", tcfg["subset"])
-    test = load_split(tcfg["input_dir"], "test", tcfg["subset"])
+    subsets = list(tcfg["subsets"])
+    data_name = "+".join(subsets)                     # e.g. "FD001+FD002"
+    train = pd.concat([load_split(tcfg["input_dir"], "train", s) for s in subsets],
+                      ignore_index=True)
+    test = pd.concat([load_split(tcfg["input_dir"], "test", s) for s in subsets],
+                     ignore_index=True)
     # All features as decimals: one sensor (s17) holds whole numbers, and an
     # integer column in the model's input schema would reject decimal input later.
     train[features] = train[features].astype("float64")
     test[features] = test[features].astype("float64")
-    X, y, groups = train[features], train["label"], train["unit"]
-    test_last = test.groupby("unit").tail(1)  # official NASA evaluation point
+    # Engine id = subset + unit: unit 1 of FD001 and unit 1 of FD002 are
+    # different engines and must be allowed into different folds.
+    groups = train["subset"] + "_" + train["unit"].astype(str)
+    X, y = train[features], train["label"]
+    test_last = test.groupby(["subset", "unit"]).tail(1)  # official NASA evaluation point
     logger.info("Training %s on %s: %d rows, %d engines, %d features",
-                model_type, tcfg["subset"], len(train), groups.nunique(), len(features))
+                model_type, data_name, len(train), groups.nunique(), len(features))
 
-    with mlflow.start_run(run_name=f"{model_type}-{tcfg['subset']}") as run:
+    with mlflow.start_run(run_name=f"{model_type}-{data_name}") as run:
         # ---- Where this run came from (reproducibility) ----
         mlflow.set_tags({
             "model_type": model_type,
             "git_commit": git_commit(),
             "git_dirty": str(git_is_dirty()),
             "dvc_features_md5": dvc_output_hash("features", "data/features"),
-            "train_subset": tcfg["subset"],
+            "train_subsets": data_name,
         })
         mlflow.log_params({
-            "model_type": model_type, "subset": tcfg["subset"], "n_splits": tcfg["n_splits"],
+            "model_type": model_type, "subsets": data_name, "n_splits": tcfg["n_splits"],
             "target_recall": tcfg["target_recall"], "window": feat["window"],
             "n_features": len(features), "sensors": ",".join(feat["sensors"]),
         })
@@ -206,7 +215,7 @@ def main(model_type_override: str | None = None) -> dict:
             warnings.simplefilter("ignore", UserWarning)
             mlflow.log_input(
                 mlflow.data.from_pandas(train[features + ["label"]], targets="label",
-                                        name=f"train_{tcfg['subset']}_features"),
+                                        name=f"train_{data_name}_features"),
                 context="training")
 
         # ---- 1. Cross-validation and threshold ----
@@ -237,6 +246,12 @@ def main(model_type_override: str | None = None) -> dict:
         metrics.update({f"cv_{k}": v for k, v in cv.items()})
         metrics.update({f"cv_default05_{k}": v for k, v in cv_default.items()})
         metrics.update({f"test_{k}": v for k, v in test_scores.items()})
+        # Also score every NASA test set on its own (FD001 to FD004), so MLflow
+        # shows where this model works and where it does not.
+        per_subset = evaluate_on_test_sets(model, threshold, features)
+        for subset, scores in per_subset.items():
+            metrics.update({f"test_{subset}_recall": scores["recall"],
+                            f"test_{subset}_pr_auc": scores["pr_auc"]})
         mlflow.log_metrics(metrics)
 
         # ---- 4. Artifacts: plots and tables ----
@@ -244,7 +259,7 @@ def main(model_type_override: str | None = None) -> dict:
                       f"{model_type}: validation precision-recall")
         plot_confusion_matrix(test_last["label"], test_prob, threshold,
                               ARTIFACT_DIR / "confusion_matrix_test.png",
-                              f"{model_type}: test set (100 engines)")
+                              f"{model_type}: test set ({len(test_last)} engines, {data_name})")
         imp = feature_importance(model, model_type, features)
         imp.to_csv(ARTIFACT_DIR / "feature_importance.csv", index=False)
         save_importance_plot(imp, ARTIFACT_DIR / "feature_importance.png")
@@ -255,10 +270,12 @@ def main(model_type_override: str | None = None) -> dict:
                         ["shap_summary.png"] if has_shap else []):
             mlflow.log_artifact(str(ARTIFACT_DIR / name), artifact_path="evaluation")
 
-        # Drift baseline: decile bins of each RAW sensor in the training data.
-        # Stored in the same run as the model, so every model version carries
-        # the description of the data it was trained on.
-        baseline = build_baseline(train, feat["sensors"], int(params["monitoring"]["psi_bins"]))
+        # Drift baseline: decile bins of each RAW sensor, one set per training
+        # subset. Stored in the same run as the model, so every model version
+        # carries the description of the data it was trained on.
+        bins = int(params["monitoring"]["psi_bins"])
+        baseline = {s: build_baseline(train[train["subset"] == s], feat["sensors"], bins)
+                    for s in subsets}
         mlflow.log_dict(baseline, "drift/baseline.json")
 
         # ---- 5. Log and register the model ----
@@ -279,6 +296,7 @@ def main(model_type_override: str | None = None) -> dict:
         for key, value in {"threshold": f"{threshold:.6f}", "model_type": model_type,
                            "test_recall": f"{test_scores['recall']:.3f}",
                            "test_pr_auc": f"{test_scores['pr_auc']:.3f}",
+                           "train_subsets": data_name,
                            "git_commit": git_commit()}.items():
             client.set_model_version_tag(mcfg["registered_model_name"], version, key, value)
 

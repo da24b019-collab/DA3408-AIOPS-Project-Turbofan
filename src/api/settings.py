@@ -39,6 +39,15 @@ class Settings:
     drift_threshold: float = 1.0
     drift_min_rows: int = 3000
     drift_window_rows: int = 5000
+    # Retraining loop (params.yaml, section "retraining")
+    retrain_subsets: tuple = ("FD001", "FD002")
+    retrain_cooldown_minutes: float = 30
+    max_fd001_drop: float = 0.05
+
+    @property
+    def jobs_file(self) -> Path:
+        """Retraining and deploy jobs (src/api/jobs.py), kept in the project folder."""
+        return self.project_dir / "retraining" / "jobs.json"
 
     @property
     def features(self) -> list:
@@ -65,4 +74,7 @@ class Settings:
             drift_threshold=float(params["monitoring"]["drift_threshold"]),
             drift_min_rows=int(params["monitoring"]["min_rows"]),
             drift_window_rows=int(params["monitoring"]["window_rows"]),
+            retrain_subsets=tuple(params["retraining"]["subsets_on_drift"]),
+            retrain_cooldown_minutes=float(params["retraining"]["cooldown_minutes"]),
+            max_fd001_drop=float(params["retraining"]["max_fd001_drop"]),
         )

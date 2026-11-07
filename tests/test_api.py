@@ -7,6 +7,8 @@ server and no trained model: they check the API's own behaviour
 """
 
 import io
+import tempfile
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -23,9 +25,12 @@ SENSORS = ["s2", "s3", "s4", "s7", "s8", "s9", "s11", "s12",
 
 
 def make_settings(api_key: str = "") -> Settings:
+    # project_dir is a fresh temporary folder: the jobs file the API writes
+    # (retraining/jobs.json) must never land in the real project.
     return Settings(mlflow_tracking_uri="http://unused", model_name="test-model",
                     model_alias="champion", model_server_url="", api_key=api_key,
-                    cors_origins=[], sensors=SENSORS, window=10)
+                    cors_origins=[], sensors=SENSORS, window=10,
+                    project_dir=Path(tempfile.mkdtemp(prefix="turbofan-test-project-")))
 
 
 class FakeModelService:

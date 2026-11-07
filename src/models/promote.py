@@ -9,6 +9,13 @@ after comparing the two.
     python -m src.models.promote                  # compare champion and challenger
     python -m src.models.promote --approve        # challenger becomes champion
     python -m src.models.promote --rollback 3     # make version 3 champion again
+
+--approve applies the same approval gate as the dashboard's Approve button
+(src/models/compare.py): both models are scored on the same NASA test sets,
+and the challenger is refused if it is clearly worse on FD001. Since Task 9
+the usual way is the dashboard, which also restarts the model server through
+the retraining worker; after using this script, restart it yourself:
+    docker compose restart model-server
 """
 
 import argparse
@@ -18,11 +25,12 @@ from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
 from src.config import load_params
+from src.models.compare import compare_versions
 from src.logger import get_logger
 from src.models.tracking import check_mlflow_server
 
 logger = get_logger(__name__)
-SHOWN_TAGS = ["model_type", "threshold", "test_recall", "test_pr_auc", "git_commit"]
+SHOWN_TAGS = ["model_type", "train_subsets", "threshold", "test_recall", "git_commit"]
 
 
 def get_version(client, name: str, alias: str):
@@ -63,6 +71,17 @@ def main() -> None:
     if args.approve:
         if challenger is None:
             raise SystemExit("No challenger to approve. Train a model first.")
+        if champion is not None and champion.version != challenger.version:
+            max_drop = float(load_params()["retraining"]["max_fd001_drop"])
+            result = compare_versions(name, champion.version, challenger.version, max_drop)
+            for subset, scores in result["scores"]["challenger"].items():
+                old = result["scores"]["champion"][subset]
+                print(f"  {subset}: recall {old['recall']:.3f} -> {scores['recall']:.3f}, "
+                      f"PR-AUC {old['pr_auc']:.3f} -> {scores['pr_auc']:.3f}")
+            for check in result["checks"]:
+                print(f"  [{'PASS' if check['passed'] else 'FAIL'}] {check['name']}: {check['detail']}")
+            if not result["approvable"]:
+                raise SystemExit("Approval refused: a check failed.")
         client.set_registered_model_alias(name, "champion", challenger.version)
         logger.info("Approved: version %s is now champion", challenger.version)
     elif args.rollback:

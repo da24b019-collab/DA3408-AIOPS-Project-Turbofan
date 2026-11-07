@@ -46,6 +46,7 @@ stages:
       - src/models/train.py
       - src/models/evaluate.py
       - src/models/tracking.py
+      - src/models/compare.py
       - src/features/feature_logic.py
       - src/monitoring/drift.py
       - src/monitoring/pipeline_metrics.py
