@@ -52,12 +52,16 @@ stages:
       size: 2249
     - path: src/features/build_features.py
       hash: md5
-      md5: 9a97c275a5c64833f1cc1fd4488b383a
-      size: 6216
+      md5: 300364150cf472c2afdf924cef20e762
+      size: 6744
     - path: src/features/feature_logic.py
       hash: md5
       md5: 28b4d67851a09ee7eb1ead64045fff6d
       size: 2516
+    - path: src/monitoring/pipeline_metrics.py
+      hash: md5
+      md5: 824cdf541d7530e2820737633279268e
+      size: 2756
     params:
       params.yaml:
         features:
@@ -82,19 +86,19 @@ stages:
     outs:
     - path: data/features
       hash: md5
-      md5: 4607db0cc074776513a148f639753000.dir
+      md5: ae9a2882f0c0360c79cea350643ce41d.dir
       size: 55354432
       nfiles: 32
     - path: reports/features_report.json
       hash: md5
-      md5: d0b334774b5e5b7d0a71e9c222751fa5
-      size: 758
+      md5: afdafacbfc2eb6db3f7f0138d6322c1a
+      size: 759
   train:
     cmd: python -m src.models.train
     deps:
     - path: data/features
       hash: md5
-      md5: 4607db0cc074776513a148f639753000.dir
+      md5: ae9a2882f0c0360c79cea350643ce41d.dir
       size: 55354432
       nfiles: 32
     - path: src/features/feature_logic.py
@@ -111,8 +115,16 @@ stages:
       size: 2360
     - path: src/models/train.py
       hash: md5
-      md5: 78b10b1c0963bfac8f95b06174e69d0d
-      size: 14666
+      md5: cd50d2d4c77b1b9d4eb4ab136800f22b
+      size: 16081
+    - path: src/monitoring/drift.py
+      hash: md5
+      md5: b5909ac42666f4d9dc85b4bec5b620cd
+      size: 6649
+    - path: src/monitoring/pipeline_metrics.py
+      hash: md5
+      md5: 824cdf541d7530e2820737633279268e
+      size: 2756
     params:
       params.yaml:
         features.sensors:
@@ -131,6 +143,7 @@ stages:
         - s20
         - s21
         features.window: 10
+        monitoring.psi_bins: 10
         train:
           input_dir: data/features
           subset: FD001
@@ -150,10 +163,10 @@ stages:
     outs:
     - path: models/latest
       hash: md5
-      md5: f495b75ce9ff60d2b7f04915766ffeea.dir
+      md5: 73d5ad25509939b0584181e6d4e9e5d5.dir
       size: 494399
       nfiles: 5
     - path: reports/train_metrics.json
       hash: md5
-      md5: c77686d12c7e286ca5baf0c250227704
+      md5: 3d2ae8b8a4c13b482cc9ce0af84c1a1e
       size: 703
