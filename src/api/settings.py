@@ -35,6 +35,10 @@ class Settings:
     # Where dvc.yaml, reports/ and the DVC data live. In Docker the code is in
     # the image (/app) while the project folder is mounted at /project.
     project_dir: Path = PROJECT_ROOT
+    # Data drift alarm (values and reasons in params.yaml, section "monitoring")
+    drift_threshold: float = 1.0
+    drift_min_rows: int = 3000
+    drift_window_rows: int = 5000
 
     @property
     def features(self) -> list:
@@ -58,4 +62,7 @@ class Settings:
             window=int(params["features"]["window"]),
             experiment_name=os.getenv("EXPERIMENT_NAME", params["mlflow"]["experiment_name"]),
             project_dir=Path(os.getenv("PROJECT_DIR", PROJECT_ROOT)),
+            drift_threshold=float(params["monitoring"]["drift_threshold"]),
+            drift_min_rows=int(params["monitoring"]["min_rows"]),
+            drift_window_rows=int(params["monitoring"]["window_rows"]),
         )

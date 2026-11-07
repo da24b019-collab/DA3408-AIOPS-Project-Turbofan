@@ -1,0 +1,12 @@
+# Load every dashboard JSON file from /var/lib/grafana/dashboards at start-up
+# (the monitoring/grafana/dashboards folder is mounted there).
+apiVersion: 1
+
+providers:
+  - name: turbofan
+    folder: Turbofan
+    type: file
+    disableDeletion: true      # the dashboard lives in Git, so it cannot be deleted in the UI
+    allowUiUpdates: false      # edit the JSON file, not the UI, so changes are versioned
+    options:
+      path: /var/lib/grafana/dashboards

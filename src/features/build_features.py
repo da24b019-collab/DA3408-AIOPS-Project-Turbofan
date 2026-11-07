@@ -24,6 +24,7 @@ from pyspark.sql import functions as F
 from src.config import PROJECT_ROOT, load_params
 from src.features.feature_logic import feature_names
 from src.logger import get_logger
+from src.monitoring.pipeline_metrics import push_stage_metrics
 
 logger = get_logger(__name__)
 
@@ -132,8 +133,9 @@ def main() -> None:
                 report["tables"][name] = {"rows": rows, "seconds": round(seconds, 2)}
                 logger.info("%s: %d rows in %.2f s", name, rows, seconds)
     except Exception as err:
-        # Any Spark or file error: log it clearly and fail the DVC stage.
+        # Any Spark or file error: log it clearly, tell monitoring, fail the DVC stage.
         logger.error("Feature engineering failed: %s", err)
+        push_stage_metrics("features", time.perf_counter() - start, success=False)
         raise
     finally:
         spark.stop()  # always release Spark's memory, even after an error
@@ -148,6 +150,11 @@ def main() -> None:
         json.dump(report, f, indent=2)
     logger.info("Done: %d rows in %.1f s (%d rows/s). Report: %s",
                 total_rows, work_seconds, report["rows_per_second"], REPORT_PATH)
+    # Monitoring: Prometheus gets the run time and throughput via the Pushgateway
+    push_stage_metrics("features", time.perf_counter() - start, success=True,
+                       values={"rows_total": total_rows,
+                               "rows_per_second": report["rows_per_second"],
+                               "spark_startup_seconds": startup_seconds})
 
 
 if __name__ == "__main__":

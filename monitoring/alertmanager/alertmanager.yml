@@ -1,0 +1,36 @@
+# Alertmanager: WHERE fired alerts go, and how often.
+#
+# Prometheus decides WHEN something is wrong (alert_rules.yml); Alertmanager
+# groups the alerts, removes duplicates, and sends notifications.
+# Here every alert goes to the backend's webhook, which logs it, shows it on
+# the dashboard's Monitoring page, and (Task 9) can start a retraining job.
+
+route:
+  receiver: backend-webhook
+  group_by: [alertname]   # one notification per kind of alert, not one per sensor/container
+  group_wait: 10s         # wait 10 s after the first alert, to send related ones together
+  group_interval: 1m      # then send changes in the group at most once a minute
+  repeat_interval: 1h     # remind every hour while an alert keeps firing
+
+receivers:
+  - name: backend-webhook
+    webhook_configs:
+      - url: http://backend:8000/alerts/webhook
+        send_resolved: true    # also tell the backend when the problem is gone
+        http_config:
+          # Sent as "Authorization: Bearer <API key>". The key is read from a
+          # file that Docker Compose creates from the API_KEY in .env (a
+          # "secret"), so the key is never written into this config file.
+          authorization:
+            type: Bearer
+            credentials_file: /run/secrets/api_key
+
+# Do not send alerts that are only a CONSEQUENCE of another one. When the
+# model server is down, every prediction fails, so "high error rate" would
+# fire too; the operator only needs the alert that names the real cause.
+inhibit_rules:
+  - source_matchers:
+      - alertname = ServiceDown
+      - instance = "http://model-server:5001/ping"
+    target_matchers:
+      - alertname =~ "HighErrorRate|HighPredictionLatency"

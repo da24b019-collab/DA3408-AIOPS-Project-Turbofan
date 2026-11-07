@@ -6,7 +6,9 @@
 |---|---|---|
 | MLflow model server (`mlflow models serve`) | 5001 | Inference engine. Turns 42 feature values into `[P(safe), P(at risk)]`. Serves the registry version with alias `champion`. |
 | FastAPI backend (`src/api`) | 8000 | Business layer used by the frontend. Validates input, computes features, calls the model server, applies the threshold, explains predictions, reports model information. |
-| MLflow tracking server | 5000 | Model registry. The backend reads the champion's version, threshold and feature list from it. |
+| MLflow tracking server | 5000 | Model registry. The backend reads the champion's version, threshold, feature list and drift baseline from it. |
+| Prometheus | 9090 | Reads the backend's `/metrics` every 15 s and evaluates the alert rules. |
+| Alertmanager | 9093 | Sends fired and resolved alerts to the backend's `/alerts/webhook`. |
 
 The frontend talks **only** to the FastAPI backend, through REST calls to a configurable base URL.
 The backend talks to the model server through a configurable URL (`MODEL_SERVER_URL`).
@@ -27,9 +29,14 @@ The backend talks to the model server through a configurable URL (`MODEL_SERVER_
 | `LOG_DIR` | `<project>/logs` | Where log files are written and read by `/logs/recent` |
 | `EXPERIMENT_NAME` | `turbofan-failure-prediction` (params.yaml) | MLflow experiment shown by `/pipeline/runs` |
 
+Drift settings come from params.yaml, section `monitoring`: threshold `1.0` (max sensor PSI),
+`min_rows` `3000`, `window_rows` `5000`. The reasons are in `docs/monitoring_findings.md`.
+
 ## 3. Endpoints
 
-All responses are JSON. Protected endpoints (marked 🔒) need `X-API-Key` when `API_KEY` is set.
+All responses are JSON except `/metrics`. Protected endpoints (marked 🔒) need the key when
+`API_KEY` is set, either as the header `X-API-Key: <key>` or as `Authorization: Bearer <key>`
+(the only form Alertmanager can send).
 
 ### 3.1 `GET /health`
 Liveness: is the process up? Never touches the model.
@@ -119,6 +126,57 @@ Latest WARNING, ERROR and CRITICAL lines from `logs/*.log`, newest first (`limit
 - **200** `{"events": [{"time": "2026-11-07 11:40:02,118", "level": "ERROR", "source": "api",
   "message": "Model unavailable: …", "file": "api.log"}, …]}`
 
+### 3.10 `GET /metrics`
+Prometheus text format, open like `/health` (counts and timings only, no sensor data).
+Not listed in `/docs`. Refreshes the state gauges (model loaded, model server in sync, drift) on each read.
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `pdm_http_requests_total` | counter | method, path, status | Requests handled (path = route template; unknown URLs = `other`) |
+| `pdm_http_request_duration_seconds` | histogram | method, path | Time to answer |
+| `pdm_predictions_total` | counter | risk_level | Engines predicted |
+| `pdm_failure_probability` | histogram | | Predicted probability per engine |
+| `pdm_engines_per_request` | histogram | | Engines in one request |
+| `pdm_sensor_rows_received_total` | counter | | Reading rows received for prediction |
+| `pdm_validation_errors_total` | counter | error | Rejected requests (`bad_file`, `invalid_input`, `invalid_request`) |
+| `pdm_model_server_duration_seconds` | histogram | | Time the MLflow model server takes |
+| `pdm_model_info` | info | version, model_type, git_commit | Served model |
+| `pdm_model_loaded`, `pdm_model_server_up` | gauge | | 1 or 0 |
+| `pdm_model_server_in_sync` | gauge | | 1 in sync, 0 not, -1 unknown |
+| `pdm_model_threshold` | gauge | | Decision threshold of the served model |
+| `pdm_drift_psi` | gauge | sensor | PSI of each sensor |
+| `pdm_drift_max_psi` | gauge | | Highest sensor PSI (-1 while fewer than `min_rows` rows) |
+| `pdm_drift_detected` | gauge | | 1 if `max_psi` > threshold |
+| `pdm_drift_threshold`, `pdm_drift_window_rows` | gauge | | Alarm threshold, rows in the window |
+| `pdm_alerts_received_total` | counter | alertname, status | Notifications received from Alertmanager |
+
+### 3.11 `GET /drift/status` 🔒
+PSI of the latest `window_rows` sensor readings received by `/predict` and `/predict/csv`,
+against the training data of the model being served.
+- **200**
+  ```json
+  {"state": "drift", "n_rows": 3054, "min_rows": 3000, "window_rows": 5000, "threshold": 1.0,
+   "baseline_model_version": "7", "max_psi": 4.5754, "worst_sensor": "s17",
+   "drift_detected": true, "sensor_psi": {"s2": 3.12, "s3": 2.87, …}}
+  ```
+  `state`: `no_baseline` (model trained before monitoring existed) | `collecting` (fewer than
+  `min_rows` rows; `max_psi` is null) | `ok` | `drift`.
+
+### 3.12 `POST /drift/reset` 🔒
+Empties the drift window (for example after a drift alert has been handled). Returns the same body as 3.11.
+The window is also emptied automatically when a different model version is loaded.
+
+### 3.13 `POST /alerts/webhook` 🔒
+Called by Alertmanager. Body: Alertmanager's webhook format (`status`, `alerts[]` with `status`,
+`labels`, `annotations`). Each alert is logged (firing = WARNING, resolved = INFO), counted in
+`pdm_alerts_received_total` and kept in memory (latest 50).
+- **200** `{"received": 1}`
+
+### 3.14 `GET /alerts/recent?limit=20` 🔒
+Alerts received, newest first (`limit` 1 to 50).
+- **200** `{"alerts": [{"received_at": "2026-11-07T13:34:02+05:30", "alertname": "DataDrift",
+  "status": "firing", "severity": "warning", "summary": "Incoming sensor data has drifted …"}]}`
+
 ## 4. PredictionResponse
 
 ```json
@@ -182,7 +240,14 @@ Every error has the body `{"error": "<code>", "detail": "<human-readable message
 | `src/api/prediction.py` | `predict_engines()`: features (shared `compute_features_pandas`) → last cycle per engine → probability → risk level → explanation |
 | `src/api/pipeline_info.py` | `pipeline_status()`, `mlflow_runs()`, `recent_log_events()` for the pipeline page |
 | `src/api/schemas.py` | Pydantic request and response models (this document's sections 3 and 4) |
-| `src/api/main.py` | FastAPI app: routes, API-key check, CORS, request logging, error handlers |
+| `src/api/metrics.py` | Prometheus metric definitions, `route_label()`, `record_predictions()`, `update_state_gauges()` |
+| `src/monitoring/drift.py` | `build_baseline()`, `bin_fractions()`, `psi()`, `psi_per_sensor()`; `DriftMonitor` class (sliding window of readings, thread-safe) |
+| `src/monitoring/pipeline_metrics.py` | `push_stage_metrics()`: DVC stages push run time, success and results to the Pushgateway |
+| `src/api/main.py` | FastAPI app: routes, API-key check, CORS, request logging and metrics, error handlers |
 
 Paradigm: functional modules for data handling and features (`engine_data`, `prediction`, `feature_logic`);
-classes where state must be kept (`Settings`, `ModelService`).
+classes where state must be kept (`Settings`, `ModelService`, `DriftMonitor`).
+
+The drift baseline is saved by `train.py` as `drift/baseline.json` in the model's MLflow run.
+`ModelService.load()` reads it with the model, so each model version is compared with its own
+training data.

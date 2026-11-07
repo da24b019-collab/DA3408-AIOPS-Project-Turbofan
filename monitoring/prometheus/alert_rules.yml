@@ -1,0 +1,112 @@
+# Alert rules: conditions Prometheus checks every 15 seconds.
+#
+# Each rule has:
+#   expr        a PromQL query; the alert is "pending" while it returns a value
+#   for         how long it must stay true before the alert FIRES (avoids
+#               alerting on a single bad moment)
+#   labels      severity: critical = the service is broken, warning = degraded
+#   annotations the human-readable text sent with the alert
+#
+# Firing alerts go to Alertmanager, which forwards them to the backend's
+# /alerts/webhook endpoint (monitoring/alertmanager/alertmanager.yml).
+
+groups:
+  - name: service-health
+    rules:
+      - alert: ServiceDown
+        expr: probe_success{job="uptime"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is not answering"
+          description: "The uptime check of {{ $labels.instance }} has failed for over 1 minute."
+
+      - alert: ModelNotLoaded
+        expr: pdm_model_loaded == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The backend has no model loaded"
+          description: "Predictions return 503. Check that MLflow is up and a champion model exists."
+
+      - alert: ModelServerOutOfSync
+        expr: pdm_model_server_in_sync == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model server serves a different model version than the backend"
+          description: "A new champion was approved but the model server was not restarted: docker compose restart model-server"
+
+      - alert: HighErrorRate
+        # Share of requests answered with a 5xx error over the last 5 minutes.
+        # (4xx errors are the user's bad input, not a fault of the service.)
+        expr: |
+          sum(rate(pdm_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(pdm_http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 5% of backend requests are failing"
+          description: "5xx error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: HighPredictionLatency
+        # 95% of prediction requests should finish within 1 second
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(pdm_http_request_duration_seconds_bucket{path=~"/predict.*"}[5m]))) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Predictions are slow"
+          description: "95th percentile prediction time is {{ $value | humanizeDuration }}."
+
+  - name: model-quality
+    rules:
+      - alert: DataDrift
+        # pdm_drift_detected is 1 when the highest sensor PSI is above the
+        # threshold in params.yaml (1.0), computed on at least 3,000 readings.
+        expr: pdm_drift_detected == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Incoming sensor data has drifted from the training data"
+          description: "Highest sensor PSI is {{ with query \"pdm_drift_max_psi\" }}{{ . | first | value | printf \"%.2f\" }}{{ end }} (alarm above 1.0). Predictions may be unreliable; consider retraining."
+
+      - alert: PipelineStageFailed
+        expr: pdm_pipeline_stage_success == 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pipeline stage {{ $labels.job }} failed on its last run"
+          description: "See logs/pipeline.log and the MLflow failed runs."
+
+  - name: resources
+    rules:
+      - alert: ContainerMemoryHigh
+        # Memory in use as a share of the container's limit (mem_limit in docker-compose.yml)
+        expr: |
+          container_memory_working_set_bytes{name=~"turbofan-.*"}
+            / (container_spec_memory_limit_bytes{name=~"turbofan-.*"} > 0) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} uses over 90% of its memory limit"
+          description: "At {{ $value | humanizePercentage }} of its limit it may soon be killed and restarted."
+
+      - alert: DiskAlmostFull
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $labels.mountpoint }} has less than 10% free space"
+          description: "Free space: {{ $value | humanizePercentage }}."

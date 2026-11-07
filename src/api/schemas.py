@@ -41,6 +41,7 @@ class ModelInfoResponse(BaseModel):
     test_metrics: dict
     sensors: list[SensorInfo]
     loaded_at: str
+    drift_baseline: bool = False   # does this model version have a drift baseline?
     previous_version: Optional[str] = None
 
 
@@ -132,3 +133,44 @@ class LogEvent(BaseModel):
 
 class LogEventsResponse(BaseModel):
     events: list[LogEvent]
+
+
+class DriftStatusResponse(BaseModel):
+    """Data drift of the recent readings vs the model's training data (PSI)."""
+    state: Literal["no_baseline", "collecting", "ok", "drift"]
+    n_rows: int                  # readings in the window now
+    min_rows: int                # PSI is only judged from this many rows on
+    window_rows: int             # size of the sliding window
+    threshold: float
+    baseline_model_version: Optional[str] = None
+    max_psi: Optional[float] = None
+    worst_sensor: Optional[str] = None
+    drift_detected: bool
+    sensor_psi: dict[str, float]
+
+
+class Alert(BaseModel):
+    """One alert as Alertmanager sends it (only the fields we use)."""
+    status: str                  # "firing" or "resolved"
+    labels: dict[str, str] = {}
+    annotations: dict[str, str] = {}
+    startsAt: Optional[str] = None
+    endsAt: Optional[str] = None
+
+
+class AlertmanagerWebhook(BaseModel):
+    """Body of an Alertmanager webhook notification."""
+    status: str
+    alerts: list[Alert]
+
+
+class ReceivedAlert(BaseModel):
+    received_at: str
+    alertname: str
+    status: str
+    severity: str
+    summary: str
+
+
+class AlertsResponse(BaseModel):
+    alerts: list[ReceivedAlert]

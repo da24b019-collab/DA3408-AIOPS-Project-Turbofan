@@ -25,6 +25,7 @@ import shap
 from mlflow.exceptions import MlflowException
 from mlflow.tracking import MlflowClient
 
+from src.api.metrics import MODEL_SERVER_LATENCY
 from src.config import SENSOR_DESCRIPTIONS
 from src.logger import get_logger
 from src.models.tracking import check_mlflow_server
@@ -47,6 +48,7 @@ class ModelService:
         self.model = None          # the scikit-learn / XGBoost model object
         self.explainer = None      # SHAP explainer for that model
         self.info = {}             # version, threshold, features, ...
+        self.drift_baseline = None # training-data bins for drift checks (src/monitoring/drift.py)
         self._lock = threading.Lock()  # a reload must not happen halfway through a request
         self._last_attempt = 0.0   # when we last tried to load (for automatic retries)
 
@@ -98,9 +100,12 @@ class ModelService:
             "loaded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
         explainer = self._make_explainer(model, info["model_type"])
+        baseline = self._load_drift_baseline(version.run_id)
+        info["drift_baseline"] = baseline is not None
 
         with self._lock:  # swap everything at once
             self.model, self.explainer, self.info = model, explainer, info
+            self.drift_baseline = baseline
         logger.info("Loaded %s version %s (%s, threshold %.3f)",
                     s.model_name, info["version"], info["model_type"], info["threshold"])
         return info
@@ -117,6 +122,20 @@ class ModelService:
             self.load()
         except ModelUnavailableError as err:
             logger.warning("Model still unavailable: %s", err)
+
+    @staticmethod
+    def _load_drift_baseline(run_id: str):
+        """
+        The drift baseline is saved by train.py in the same MLflow run as the
+        model, so each model version is compared with ITS OWN training data.
+        Models trained before monitoring was added have none: drift is then
+        reported as "no_baseline" instead of the API failing.
+        """
+        try:
+            return mlflow.artifacts.load_dict(f"runs:/{run_id}/drift/baseline.json")
+        except Exception as err:  # missing file, or the artifact store is unreachable
+            logger.warning("No drift baseline for run %s: %s", run_id, err)
+            return None
 
     @staticmethod
     def _make_explainer(model, model_type: str):
@@ -143,8 +162,9 @@ class ModelService:
             f"{self.settings.model_server_url}/invocations", data=body,
             headers={"Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                predictions = json.loads(response.read())["predictions"]
+            with MODEL_SERVER_LATENCY.time():  # how long the inference engine takes
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    predictions = json.loads(response.read())["predictions"]
         except (urllib.error.URLError, OSError, KeyError, ValueError) as err:
             raise ModelUnavailableError(f"Model server error: {err}") from err
         return np.asarray(predictions, dtype=float)[:, 1]  # column 1 = P(at risk)

@@ -1,0 +1,10 @@
+# Blackbox exporter: checks services from the OUTSIDE, like a user would.
+# Module "http_2xx": send a GET request; success = an HTTP 2xx answer within 5 s.
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: []        # empty = any 2xx
+      preferred_ip_protocol: ip4

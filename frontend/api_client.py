@@ -82,3 +82,13 @@ class ApiClient:
 
     def recent_logs(self, limit: int = 50) -> dict:
         return self._request("GET", "/logs/recent", params={"limit": limit})
+
+    # ---- monitoring ----
+    def drift_status(self) -> dict:
+        return self._request("GET", "/drift/status")
+
+    def reset_drift(self) -> dict:
+        return self._request("POST", "/drift/reset")
+
+    def recent_alerts(self, limit: int = 20) -> dict:
+        return self._request("GET", "/alerts/recent", params={"limit": limit})

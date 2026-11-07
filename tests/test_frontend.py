@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "frontend"))
 
 from api_client import ApiClient, ApiError  # noqa: E402
+from views.monitoring import drift_message, psi_table  # noqa: E402
 from views.pipeline import dag_dot  # noqa: E402
 from views.predict import probability_text, results_table  # noqa: E402
 
@@ -61,3 +62,24 @@ def test_unreachable_backend_gives_friendly_error():
         client.model_info()
     assert err.value.code == "connection_error"
     assert "Is the backend running?" in str(err.value)
+
+
+def drift_status(state, max_psi=None, sensor_psi=None):
+    return {"state": state, "n_rows": 1200, "min_rows": 3000, "window_rows": 5000,
+            "threshold": 1.0, "max_psi": max_psi, "worst_sensor": "s11",
+            "baseline_model_version": "7", "drift_detected": state == "drift",
+            "sensor_psi": sensor_psi or {}}
+
+
+def test_drift_messages_for_each_state():
+    assert drift_message(drift_status("collecting"))[0] == "info"
+    assert "1,200 received" in drift_message(drift_status("collecting"))[1]
+    kind, text = drift_message(drift_status("drift", 4.58))
+    assert kind == "error" and "4.58 on s11" in text
+    assert drift_message(drift_status("ok", 0.4))[0] == "success"
+
+
+def test_psi_table_sorted_with_verdicts():
+    table = psi_table(drift_status("drift", 4.6, {"s2": 0.3, "s17": 4.6, "s11": 1.2}))
+    assert list(table["Sensor"]) == ["s17", "s11", "s2"]
+    assert list(table["Verdict"]) == ["drifted", "drifted", "stable"]

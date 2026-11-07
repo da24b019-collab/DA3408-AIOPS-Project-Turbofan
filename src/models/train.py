@@ -10,7 +10,9 @@ Steps:
     4. Train the final model on all training engines (with MLflow autolog on).
     5. Evaluate on the official NASA test set (last cycle of each engine).
     6. Log to MLflow: parameters, metrics, plots, SHAP explanation, the Git
-       commit, the DVC data version and the dataset itself.
+       commit, the DVC data version and the dataset itself. Also the drift
+       baseline: how the training readings of each sensor are spread out,
+       which the API later compares new readings against.
     7. Register the model as a new version with the alias "challenger".
        A human later promotes it to "champion" (src/models/promote.py).
 
@@ -52,6 +54,8 @@ from src.models.evaluate import (
     plot_pr_curve,
 )
 from src.models.tracking import check_mlflow_server, dvc_output_hash, git_commit, git_is_dirty
+from src.monitoring.drift import build_baseline
+from src.monitoring.pipeline_metrics import push_stage_metrics
 
 logger = get_logger(__name__)
 
@@ -157,7 +161,7 @@ def enable_autolog(model_type: str, enable: bool) -> None:
         mlflow.sklearn.autolog(disable=not enable, log_models=False, log_datasets=False, silent=True)
 
 
-def main(model_type_override: str | None = None) -> None:
+def main(model_type_override: str | None = None) -> dict:
     params = load_params()
     tcfg, mcfg = params["train"], params["mlflow"]
     feat = params["features"]
@@ -251,6 +255,12 @@ def main(model_type_override: str | None = None) -> None:
                         ["shap_summary.png"] if has_shap else []):
             mlflow.log_artifact(str(ARTIFACT_DIR / name), artifact_path="evaluation")
 
+        # Drift baseline: decile bins of each RAW sensor in the training data.
+        # Stored in the same run as the model, so every model version carries
+        # the description of the data it was trained on.
+        baseline = build_baseline(train, feat["sensors"], int(params["monitoring"]["psi_bins"]))
+        mlflow.log_dict(baseline, "drift/baseline.json")
+
         # ---- 5. Log and register the model ----
         # pyfunc_predict_fn="predict_proba": when served, the model returns
         # probabilities, and the API applies the threshold stored with it.
@@ -286,10 +296,26 @@ def main(model_type_override: str | None = None) -> None:
     logger.info("Run %s | model version %s (alias: challenger)", run.info.run_id, version)
     logger.info("Test: recall %.3f, precision %.3f, PR-AUC %.3f",
                 test_scores["recall"], test_scores["precision"], test_scores["pr_auc"])
+    return report
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train and track a failure classifier")
     parser.add_argument("--model-type", choices=MODEL_TYPES, default=None,
                         help="overrides train.model_type in params.yaml")
-    main(parser.parse_args().model_type)
+    args = parser.parse_args()
+
+    # Run the stage and report the outcome to Prometheus (via the Pushgateway),
+    # so a failed training run shows up on the Grafana dashboard too.
+    started = time.perf_counter()
+    try:
+        result = main(args.model_type)
+    except Exception:
+        push_stage_metrics("train", time.perf_counter() - started, success=False)
+        raise
+    push_stage_metrics("train", time.perf_counter() - started, success=True,
+                       values={"model_version": result["model_version"],
+                               "test_recall": result["test_recall"],
+                               "test_precision": result["test_precision"],
+                               "test_pr_auc": result["test_pr_auc"],
+                               "threshold": result["threshold"]})

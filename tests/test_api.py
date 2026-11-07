@@ -195,3 +195,85 @@ def test_summary_lists_reasons_naturally():
     factors = [{"description": d, "effect": "raises risk"} for d in ("A", "B", "C")]
     assert summary_sentence("high", factors).endswith("Main reasons: A, B and C are raising the risk.")
     assert summary_sentence("high", factors[:1]).endswith("Main reasons: A is raising the risk.")
+
+
+# ------------------------------------------------------------ monitoring (Task 8)
+from src.monitoring.drift import build_baseline  # noqa: E402
+
+
+def drift_client(api_key: str = ""):
+    """App whose fake model has a drift baseline: every sensor near 100 in training."""
+    settings = make_settings(api_key)
+    settings.drift_min_rows, settings.drift_window_rows = 300, 600
+    fake = FakeModelService(settings)
+    rng = __import__("numpy").random.default_rng(0)
+    training = pd.DataFrame({s: rng.normal(100, 1, 2000) for s in SENSORS})
+    fake.drift_baseline = build_baseline(training, SENSORS)
+    return TestClient(create_app(settings, fake))
+
+
+def noisy_engine(unit: int, n_cycles: int, centre: float) -> list:
+    rng = __import__("numpy").random.default_rng(unit)
+    rows = []
+    for cycle in range(1, n_cycles + 1):
+        rows.append({"unit": unit, "cycle": cycle,
+                     **{s: float(rng.normal(centre, 1)) for s in SENSORS}})
+    return rows
+
+
+def test_metrics_page_is_open_and_counts_predictions(client):
+    client.post("/predict", json={"readings": engine_rows(1, 12, 47.9)})
+    page = client.get("/metrics")
+    assert page.status_code == 200
+    assert "text/plain" in page.headers["content-type"]
+    text = page.text
+    assert 'pdm_http_requests_total{method="POST",path="/predict",status="200"}' in text
+    assert "pdm_predictions_total" in text
+    assert "pdm_model_loaded 1.0" in text
+
+
+def test_unknown_paths_are_grouped_in_metrics(client):
+    client.get("/no-such-page-123")
+    assert 'path="other"' in client.get("/metrics").text
+    assert "no-such-page-123" not in client.get("/metrics").text
+
+
+def test_validation_errors_are_counted(client):
+    client.post("/predict", json={"readings": [{"unit": 1}]})
+    assert 'pdm_validation_errors_total{error="invalid_input"}' in client.get("/metrics").text
+
+
+def test_drift_without_baseline(client):
+    assert client.get("/drift/status").json()["state"] == "no_baseline"
+
+
+def test_drift_collecting_then_ok_then_drift():
+    with drift_client() as c:
+        c.post("/predict", json={"readings": noisy_engine(1, 100, 100)})
+        assert c.get("/drift/status").json()["state"] == "collecting"   # 100 < 300 rows
+
+        # Same distribution as training. (With only ~40 rows this would wrongly
+        # show "drift": small samples inflate PSI, the reason for min_rows.)
+        c.post("/predict", json={"readings": noisy_engine(2, 400, 100)})
+        assert c.get("/drift/status").json()["state"] == "ok"
+
+        c.post("/predict", json={"readings": noisy_engine(3, 600, 105)})  # far from training
+        status = c.get("/drift/status").json()
+        assert status["state"] == "drift" and status["drift_detected"]
+        assert "pdm_drift_detected 1.0" in c.get("/metrics").text
+
+        assert c.post("/drift/reset").json()["n_rows"] == 0
+
+
+def test_alert_webhook_accepts_bearer_token_and_stores_alert():
+    alert = {"status": "firing", "alerts": [{
+        "status": "firing", "labels": {"alertname": "DataDrift", "severity": "warning"},
+        "annotations": {"summary": "Sensor data has drifted"}}]}
+    with drift_client(api_key="secret") as c:
+        assert c.post("/alerts/webhook", json=alert).status_code == 401
+        ok = c.post("/alerts/webhook", json=alert, headers={"Authorization": "Bearer secret"})
+        assert ok.status_code == 200 and ok.json() == {"received": 1}
+        recent = c.get("/alerts/recent", headers={"X-API-Key": "secret"}).json()["alerts"]
+        assert recent[0]["alertname"] == "DataDrift" and recent[0]["status"] == "firing"
+        # /metrics stays open even when an API key is set
+        assert c.get("/metrics").status_code == 200

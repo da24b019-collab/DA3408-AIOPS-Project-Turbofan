@@ -52,3 +52,18 @@ mlflow:
   tracking_uri: http://127.0.0.1:5000
   experiment_name: turbofan-failure-prediction
   registered_model_name: turbofan-failure-classifier
+
+monitoring:
+  # Data drift is measured with the Population Stability Index (PSI) of each of
+  # the 14 sensors: recent readings vs the training data, 10 bins per sensor
+  # (cut at the training data's deciles).
+  psi_bins: 10
+  # Values chosen by experiments/drift_threshold_study.py (100 random windows of
+  # whole engines per case, see docs/monitoring_findings.md):
+  #   normal FD001 test data: false alarms 49% at 1000 rows, 1% at 3000, 0% at 5000
+  #   FD002 (new operating conditions): max PSI always above 4.2 -> 100% detected
+  #   FD003 (second fault mode): detected in 87% (3000 rows) to 91% (5000 rows)
+  drift_threshold: 1.0     # drift if the highest sensor PSI is above this
+  min_rows: 3000           # below this PSI is unreliable (normal data reaches 4.0)
+  window_rows: 5000        # PSI is computed on the most recent 5000 readings
+  pushgateway_url: http://127.0.0.1:9091   # where pipeline jobs push their metrics

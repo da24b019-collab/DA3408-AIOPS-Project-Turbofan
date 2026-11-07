@@ -5,6 +5,14 @@
 #                                             │                    │
 #                                             └──────> mlflow (5000) <┘   (model registry)
 #
+#   Monitoring (Task 8):
+#     prometheus (9090) reads /metrics of: backend, mlflow, pushgateway,
+#                       node-exporter (laptop), cadvisor (containers),
+#                       blackbox-exporter (uptime checks of every service)
+#     prometheus ──alerts──> alertmanager (9093) ──webhook──> backend /alerts/webhook
+#     grafana (3000) draws dashboards from prometheus
+#     DVC stages on the laptop push their metrics to pushgateway (9091)
+#
 # Inside Docker's private network, containers reach each other BY NAME
 # (http://backend:8000, http://mlflow:5000). Ports are published only on
 # 127.0.0.1, so the services are reachable from this laptop but not from
@@ -47,6 +55,7 @@ services:
       --artifacts-destination /project/mlflow_data/artifacts
       --host 0.0.0.0 --port 5000 --workers 2
       --allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+      --expose-prometheus /tmp/mlflow-prometheus
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ./mlflow_data:/project/mlflow_data
@@ -141,3 +150,133 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
+
+  # ======================================================== monitoring (Task 8)
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    container_name: turbofan-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d     # keep 15 days of history
+      - --web.enable-lifecycle                # allows: curl -X POST localhost:9090/-/reload
+    volumes:
+      # The whole folder, not single files: an editor that saves a file by
+      # replacing it would otherwise leave the container with the old copy.
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 512m
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.2
+    container_name: turbofan-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    secrets:
+      - api_key            # appears as the file /run/secrets/api_key
+    ports:
+      - "127.0.0.1:9093:9093"
+    mem_limit: 128m
+
+  pushgateway:
+    image: prom/pushgateway:v1.11.4
+    container_name: turbofan-pushgateway
+    restart: unless-stopped
+    command:
+      # Save pushed metrics to disk, so a restart does not forget the last run
+      - --persistence.file=/data/pushgateway.db
+    volumes:
+      - pushgateway_data:/data
+    ports:
+      - "127.0.0.1:9091:9091"    # the DVC stages run on the laptop and push here
+    mem_limit: 128m
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.29.1
+    container_name: turbofan-blackbox-exporter
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./monitoring/blackbox:/etc/blackbox:ro
+    mem_limit: 64m
+
+  node-exporter:
+    # Metrics of the laptop itself. It reads the host's /proc and /sys through
+    # the read-only mount of / at /host.
+    image: prom/node-exporter:v1.12.1
+    container_name: turbofan-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m
+
+  cadvisor:
+    # Metrics of every container (CPU, memory, network). It needs read access
+    # to Docker's data folder; on this laptop Docker keeps it in a custom place,
+    # set by DOCKER_DATA_DIR in .env (default /var/lib/docker).
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: turbofan-cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    command:
+      - --docker_only=true                # only containers, not every system process
+      - --housekeeping_interval=15s       # collect every 15 s (default 1 s uses more CPU)
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - ${DOCKER_DATA_DIR:-/var/lib/docker}:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 256m
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    container_name: turbofan-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      # Required: docker compose stops with this message if it is missing from .env
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/turbofan.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "127.0.0.1:3000:3000"
+    mem_limit: 512m
+
+# Named volumes: Docker-managed storage that survives `docker compose down`
+# (removed only with `docker compose down -v`).
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  pushgateway_data:
+  grafana_data:
+
+# Secrets: Docker Compose writes the API key from .env into a file inside the
+# alertmanager container, so the key never appears in a config file in Git.
+secrets:
+  api_key:
+    environment: API_KEY

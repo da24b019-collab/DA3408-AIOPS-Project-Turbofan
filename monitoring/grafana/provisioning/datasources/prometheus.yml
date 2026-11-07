@@ -1,0 +1,15 @@
+# Grafana "provisioning": Grafana reads this folder at start-up, so the data
+# source exists without clicking through the web interface. The setup is
+# therefore in Git and identical on every machine.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus            # the dashboard JSON refers to the data source by this id
+    type: prometheus
+    access: proxy              # Grafana's server calls Prometheus (not the browser)
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s        # same as Prometheus' scrape interval

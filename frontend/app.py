@@ -14,7 +14,7 @@ import streamlit as st
 from api_client import BACKEND_URL, ApiClient, ApiError
 from ui import apply_style
 from views import help as help_page
-from views import model, pipeline, predict
+from views import model, monitoring, pipeline, predict
 
 st.set_page_config(page_title="Engine Health Dashboard", page_icon="🛠️", layout="wide")
 apply_style()
@@ -49,6 +49,8 @@ def sidebar_status() -> None:
 pages = st.navigation([
     st.Page(predict.render, title="Engine check", icon=":material/monitor_heart:", default=True),
     st.Page(pipeline.render, title="Pipeline", icon=":material/account_tree:", url_path="pipeline"),
+    st.Page(monitoring.render, title="Monitoring", icon=":material/monitoring:",
+            url_path="monitoring"),
     st.Page(model.render, title="Model", icon=":material/model_training:", url_path="model"),
     st.Page(help_page.render, title="Help", icon=":material/help:", url_path="help"),
 ])

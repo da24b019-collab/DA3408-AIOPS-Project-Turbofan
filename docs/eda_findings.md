@@ -41,3 +41,10 @@ Sensors kept (14): s2, s3, s4, s7, s8, s9, s11, s12, s13, s14, s15, s17, s20, s2
 - Replaying FD002/FD004 into the system demonstrates covariate drift, which PSI should detect.
 - FD003 has a second fault mode (fan) with the same operating condition: closer to concept
   drift, which input-based PSI may not detect. Model performance monitoring is needed for that.
+## Correction (Task 8)
+
+The EDA compared FD003 with FD001 by sensor averages and concluded FD003 would not be
+detectable as drift. Comparing the full distribution of each sensor (PSI, 10 bins) shows
+otherwise: windows of 3,000 to 5,000 FD003 readings have a highest sensor PSI above the
+alarm threshold of 1.0 in 87 to 91% of cases, while normal FD001 data stays at or below
+it in 99 to 100% of cases. Details: docs/monitoring_findings.md.
