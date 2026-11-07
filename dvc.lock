@@ -105,6 +105,10 @@ stages:
       hash: md5
       md5: 28b4d67851a09ee7eb1ead64045fff6d
       size: 2516
+    - path: src/models/compare.py
+      hash: md5
+      md5: a2de5b6bf97f74f7954c242382d1544c
+      size: 3829
     - path: src/models/evaluate.py
       hash: md5
       md5: bb1a0c1524105e6f0e79687ca20e679b
@@ -115,12 +119,12 @@ stages:
       size: 2360
     - path: src/models/train.py
       hash: md5
-      md5: cd50d2d4c77b1b9d4eb4ab136800f22b
-      size: 16081
+      md5: 85dc697c9a60d985aeca19228a96a476
+      size: 17204
     - path: src/monitoring/drift.py
       hash: md5
-      md5: b5909ac42666f4d9dc85b4bec5b620cd
-      size: 6649
+      md5: 1a493720c7221546f9e0dca7177a6a5d
+      size: 7890
     - path: src/monitoring/pipeline_metrics.py
       hash: md5
       md5: 824cdf541d7530e2820737633279268e
@@ -146,7 +150,9 @@ stages:
         monitoring.psi_bins: 10
         train:
           input_dir: data/features
-          subset: FD001
+          subsets:
+          - FD001
+          - FD002
           model_type: xgboost
           n_splits: 5
           target_recall: 0.9
@@ -163,10 +169,10 @@ stages:
     outs:
     - path: models/latest
       hash: md5
-      md5: 73d5ad25509939b0584181e6d4e9e5d5.dir
-      size: 494399
+      md5: 831e2ce0ef448977d8bb928bdacc8c74.dir
+      size: 508815
       nfiles: 5
     - path: reports/train_metrics.json
       hash: md5
-      md5: 3d2ae8b8a4c13b482cc9ce0af84c1a1e
-      size: 703
+      md5: bbed39a71bc3c212448b2e40c760fca2
+      size: 952
