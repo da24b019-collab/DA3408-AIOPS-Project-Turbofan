@@ -8,3 +8,5 @@ dvc>=3.0             # data versioning and pipeline (dvc repro)
 pytest>=7.0          # unit tests
 jupyter>=1.0         # notebooks for exploratory data analysis
 matplotlib>=3.7      # plots during EDA
+scikit-learn>=1.4       # baseline models and evaluation metrics
+xgboost>=2.0            # main model

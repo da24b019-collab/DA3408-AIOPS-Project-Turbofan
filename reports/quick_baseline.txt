@@ -1,0 +1,20 @@
+Dropped flat sensors: ['s1', 's5', 's10', 's16', 's18', 's19']
+Number of features: 45
+Test engines: 100, at risk: 25
+
+=== Validation: GroupKFold by engine (mean of 5 folds) ===
+                     accuracy  precision  recall     f1  pr_auc
+Logistic regression     0.942      0.746   0.943  0.831   0.952
+Random forest           0.956      0.841   0.883  0.859   0.950
+XGBoost                 0.946      0.782   0.907  0.838   0.949
+Always say safe         0.850      0.000   0.000  0.000   0.150
+
+=== Official test set: last cycle of each engine ===
+                     accuracy  precision  recall     f1  pr_auc
+Logistic regression      0.93      0.846    0.88  0.863   0.941
+Random forest            0.93      0.950    0.76  0.844   0.954
+XGBoost                  0.92      0.870    0.80  0.833   0.938
+Always say safe          0.75      0.000    0.00  0.000   0.250
+
+=== XGBoost with a LEAKY random row split (do not use) ===
+{'accuracy': 0.965, 'precision': 0.83, 'recall': 0.968, 'f1': 0.894, 'pr_auc': 0.982}
