@@ -45,12 +45,12 @@ class ModelUnavailableError(Exception):
 class ModelService:
     def __init__(self, settings):
         self.settings = settings
-        self.model = None          # the scikit-learn / XGBoost model object
-        self.explainer = None      # SHAP explainer for that model
-        self.info = {}             # version, threshold, features, ...
-        self.drift_baseline = None # training-data bins for drift checks (src/monitoring/drift.py)
+        self.model = None  # the scikit-learn / XGBoost model object
+        self.explainer = None  # SHAP explainer for that model
+        self.info = {}  # version, threshold, features, ...
+        self.drift_baseline = None  # training-data bins for drift checks (src/monitoring/drift.py)
         self._lock = threading.Lock()  # a reload must not happen halfway through a request
-        self._last_attempt = 0.0   # when we last tried to load (for automatic retries)
+        self._last_attempt = 0.0  # when we last tried to load (for automatic retries)
 
     # ------------------------------------------------------------------ loading
     @property
@@ -66,7 +66,9 @@ class ModelService:
         try:
             check_mlflow_server(s.mlflow_tracking_uri)  # fail in seconds, not minutes
         except RuntimeError as err:
-            raise ModelUnavailableError(f"Model registry unreachable at {s.mlflow_tracking_uri}") from err
+            raise ModelUnavailableError(
+                f"Model registry unreachable at {s.mlflow_tracking_uri}"
+            ) from err
         mlflow.set_tracking_uri(s.mlflow_tracking_uri)
         uri = f"models:/{s.model_name}@{s.model_alias}"
         try:
@@ -80,7 +82,8 @@ class ModelService:
         if list(features) != list(s.features):
             raise ModelUnavailableError(
                 "The model was trained on different features than this API computes. "
-                "Retrain the model or update params.yaml.")
+                "Retrain the model or update params.yaml."
+            )
 
         info = {
             "model_name": s.model_name,
@@ -106,8 +109,13 @@ class ModelService:
         with self._lock:  # swap everything at once
             self.model, self.explainer, self.info = model, explainer, info
             self.drift_baseline = baseline
-        logger.info("Loaded %s version %s (%s, threshold %.3f)",
-                    s.model_name, info["version"], info["model_type"], info["threshold"])
+        logger.info(
+            "Loaded %s version %s (%s, threshold %.3f)",
+            s.model_name,
+            info["version"],
+            info["model_type"],
+            info["threshold"],
+        )
         return info
 
     def load_if_missing(self, retry_seconds: float = 30) -> None:
@@ -159,8 +167,10 @@ class ModelService:
         """Call the MLflow model server's /invocations endpoint."""
         body = json.dumps({"dataframe_split": X.to_dict(orient="split")}).encode()
         request = urllib.request.Request(
-            f"{self.settings.model_server_url}/invocations", data=body,
-            headers={"Content-Type": "application/json"})
+            f"{self.settings.model_server_url}/invocations",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
         try:
             with MODEL_SERVER_LATENCY.time():  # how long the inference engine takes
                 with urllib.request.urlopen(request, timeout=30) as response:
@@ -181,18 +191,24 @@ class ModelService:
         with self._lock:
             values = self.explainer.shap_values(row)
         values = np.asarray(values)
-        if values.ndim == 3:        # (rows, features, classes) for some models
+        if values.ndim == 3:  # (rows, features, classes) for some models
             values = values[:, :, 1]
         per_feature = dict(zip(row.columns, values[0]))
 
         per_sensor = {}
         for feature, value in per_feature.items():
-            sensor = feature.split("_")[0]   # "s3_mean10" -> "s3"
+            sensor = feature.split("_")[0]  # "s3_mean10" -> "s3"
             per_sensor[sensor] = per_sensor.get(sensor, 0.0) + float(value)
         ranked = sorted(per_sensor.items(), key=lambda item: abs(item[1]), reverse=True)
-        return [{"sensor": s, "description": SENSOR_DESCRIPTIONS[s],
-                 "effect": "raises risk" if v > 0 else "lowers risk",
-                 "contribution": round(v, 4)} for s, v in ranked]
+        return [
+            {
+                "sensor": s,
+                "description": SENSOR_DESCRIPTIONS[s],
+                "effect": "raises risk" if v > 0 else "lowers risk",
+                "contribution": round(v, 4),
+            }
+            for s, v in ranked
+        ]
 
     # ------------------------------------------------------------------ checks
     def model_server_status(self) -> tuple:
@@ -208,7 +224,8 @@ class ModelService:
             return "unknown", None
         check_input = pd.DataFrame(
             np.random.default_rng(0).normal(size=(3, len(self.settings.features))),
-            columns=self.settings.features)
+            columns=self.settings.features,
+        )
         try:
             server_prob = self._predict_with_server(check_input)
         except ModelUnavailableError:

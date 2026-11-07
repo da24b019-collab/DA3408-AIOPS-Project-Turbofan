@@ -78,18 +78,27 @@ def build_model(model_type: str, cfg: dict, pos_weight: float, seed: int):
     """Create an untrained model. Every model handles class imbalance in its own way."""
     if model_type == "xgboost":
         return XGBClassifier(
-            n_estimators=cfg["n_estimators"], max_depth=cfg["max_depth"],
+            n_estimators=cfg["n_estimators"],
+            max_depth=cfg["max_depth"],
             learning_rate=cfg["learning_rate"],
             scale_pos_weight=pos_weight,  # weight "at risk" rows by (safe / at-risk)
-            n_jobs=-1, random_state=seed, eval_metric="logloss")
+            n_jobs=-1,
+            random_state=seed,
+            eval_metric="logloss",
+        )
     if model_type == "random_forest":
         return RandomForestClassifier(
-            n_estimators=cfg["n_estimators"], min_samples_leaf=cfg["min_samples_leaf"],
-            class_weight="balanced", n_jobs=-1, random_state=seed)
+            n_estimators=cfg["n_estimators"],
+            min_samples_leaf=cfg["min_samples_leaf"],
+            class_weight="balanced",
+            n_jobs=-1,
+            random_state=seed,
+        )
     if model_type == "logistic_regression":
         # Scaling matters for logistic regression because sensors have very different units
-        return make_pipeline(StandardScaler(), LogisticRegression(
-            C=cfg["C"], class_weight="balanced", max_iter=2000))
+        return make_pipeline(
+            StandardScaler(), LogisticRegression(C=cfg["C"], class_weight="balanced", max_iter=2000)
+        )
     raise ValueError(f"Unknown model_type '{model_type}'. Choose from {MODEL_TYPES}")
 
 
@@ -130,8 +139,11 @@ def feature_importance(model, model_type: str, features: list) -> pd.DataFrame:
 def save_importance_plot(imp: pd.DataFrame, path) -> None:
     top = imp.head(15).iloc[::-1]
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.barh([f"{f} ({n})" for f, n in zip(top["feature"], top["sensor_name"])],
-            top["importance"], color="steelblue")
+    ax.barh(
+        [f"{f} ({n})" for f, n in zip(top["feature"], top["sensor_name"])],
+        top["importance"],
+        color="steelblue",
+    )
     ax.set_title("Top 15 features by importance")
     fig.tight_layout()
     fig.savefig(path, dpi=120)
@@ -143,9 +155,9 @@ def save_shap_plot(model, model_type: str, X_sample: pd.DataFrame, path) -> bool
     if model_type == "logistic_regression":
         return False  # tree explainer does not apply; importance plot covers this model
     values = shap.TreeExplainer(model).shap_values(X_sample)
-    if isinstance(values, list):      # older SHAP: one array per class
+    if isinstance(values, list):  # older SHAP: one array per class
         values = values[1]
-    elif np.ndim(values) == 3:        # newer SHAP for random forest: (rows, features, classes)
+    elif np.ndim(values) == 3:  # newer SHAP for random forest: (rows, features, classes)
         values = values[:, :, 1]
     shap.summary_plot(values, X_sample, show=False, max_display=15)
     plt.gcf().set_size_inches(9, 7)
@@ -158,9 +170,13 @@ def save_shap_plot(model, model_type: str, X_sample: pd.DataFrame, path) -> bool
 def enable_autolog(model_type: str, enable: bool) -> None:
     """Autolog records the model's own parameters and training metrics automatically."""
     if model_type == "xgboost":
-        mlflow.xgboost.autolog(disable=not enable, log_models=False, log_datasets=False, silent=True)
+        mlflow.xgboost.autolog(
+            disable=not enable, log_models=False, log_datasets=False, silent=True
+        )
     else:
-        mlflow.sklearn.autolog(disable=not enable, log_models=False, log_datasets=False, silent=True)
+        mlflow.sklearn.autolog(
+            disable=not enable, log_models=False, log_datasets=False, silent=True
+        )
 
 
 def main(model_type_override: str | None = None) -> dict:
@@ -179,11 +195,11 @@ def main(model_type_override: str | None = None) -> dict:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
     subsets = list(tcfg["subsets"])
-    data_name = "+".join(subsets)                     # e.g. "FD001+FD002"
-    train = pd.concat([load_split(tcfg["input_dir"], "train", s) for s in subsets],
-                      ignore_index=True)
-    test = pd.concat([load_split(tcfg["input_dir"], "test", s) for s in subsets],
-                     ignore_index=True)
+    data_name = "+".join(subsets)  # e.g. "FD001+FD002"
+    train = pd.concat(
+        [load_split(tcfg["input_dir"], "train", s) for s in subsets], ignore_index=True
+    )
+    test = pd.concat([load_split(tcfg["input_dir"], "test", s) for s in subsets], ignore_index=True)
     # All features as decimals: one sensor (s17) holds whole numbers, and an
     # integer column in the model's input schema would reject decimal input later.
     train[features] = train[features].astype("float64")
@@ -193,40 +209,61 @@ def main(model_type_override: str | None = None) -> dict:
     groups = train["subset"] + "_" + train["unit"].astype(str)
     X, y = train[features], train["label"]
     test_last = test.groupby(["subset", "unit"]).tail(1)  # official NASA evaluation point
-    logger.info("Training %s on %s: %d rows, %d engines, %d features",
-                model_type, data_name, len(train), groups.nunique(), len(features))
+    logger.info(
+        "Training %s on %s: %d rows, %d engines, %d features",
+        model_type,
+        data_name,
+        len(train),
+        groups.nunique(),
+        len(features),
+    )
 
     with mlflow.start_run(run_name=f"{model_type}-{data_name}") as run:
         # ---- Where this run came from (reproducibility) ----
-        mlflow.set_tags({
-            "model_type": model_type,
-            "git_commit": git_commit(),
-            "git_dirty": str(git_is_dirty()),
-            "dvc_features_md5": dvc_output_hash("features", "data/features"),
-            "train_subsets": data_name,
-        })
-        mlflow.log_params({
-            "model_type": model_type, "subsets": data_name, "n_splits": tcfg["n_splits"],
-            "target_recall": tcfg["target_recall"], "window": feat["window"],
-            "n_features": len(features), "sensors": ",".join(feat["sensors"]),
-        })
+        mlflow.set_tags(
+            {
+                "model_type": model_type,
+                "git_commit": git_commit(),
+                "git_dirty": str(git_is_dirty()),
+                "dvc_features_md5": dvc_output_hash("features", "data/features"),
+                "train_subsets": data_name,
+            }
+        )
+        mlflow.log_params(
+            {
+                "model_type": model_type,
+                "subsets": data_name,
+                "n_splits": tcfg["n_splits"],
+                "target_recall": tcfg["target_recall"],
+                "window": feat["window"],
+                "n_features": len(features),
+                "sensors": ",".join(feat["sensors"]),
+            }
+        )
         with warnings.catch_warnings():
             # The 0/1 label column is an integer; MLflow warns about that, but it is correct here.
             warnings.simplefilter("ignore", UserWarning)
             mlflow.log_input(
-                mlflow.data.from_pandas(train[features + ["label"]], targets="label",
-                                        name=f"train_{data_name}_features"),
-                context="training")
+                mlflow.data.from_pandas(
+                    train[features + ["label"]], targets="label", name=f"train_{data_name}_features"
+                ),
+                context="training",
+            )
 
         # ---- 1. Cross-validation and threshold ----
         start = time.perf_counter()
         oof_prob, fold_pr_auc = cross_validate(
-            model_type, tcfg[model_type], X, y, groups, int(tcfg["n_splits"]), seed)
+            model_type, tcfg[model_type], X, y, groups, int(tcfg["n_splits"]), seed
+        )
         threshold = choose_threshold(y, oof_prob, float(tcfg["target_recall"]))
         cv = classification_metrics(y, oof_prob, threshold)
         cv_default = classification_metrics(y, oof_prob, 0.5)
-        logger.info("Chosen threshold %.3f -> CV recall %.3f, precision %.3f",
-                    threshold, cv["recall"], cv["precision"])
+        logger.info(
+            "Chosen threshold %.3f -> CV recall %.3f, precision %.3f",
+            threshold,
+            cv["recall"],
+            cv["precision"],
+        )
 
         # ---- 2. Final model on all training engines (autolog on) ----
         pos_weight = (y == 0).sum() / (y == 1).sum()
@@ -240,9 +277,12 @@ def main(model_type_override: str | None = None) -> dict:
         test_prob = model.predict_proba(test_last[features])[:, 1]
         test_scores = classification_metrics(test_last["label"], test_prob, threshold)
 
-        metrics = {"threshold": threshold, "train_seconds": round(train_seconds, 2),
-                   "cv_pr_auc_fold_std": float(np.std(fold_pr_auc)),
-                   "test_always_safe_accuracy": float(1 - test_last["label"].mean())}
+        metrics = {
+            "threshold": threshold,
+            "train_seconds": round(train_seconds, 2),
+            "cv_pr_auc_fold_std": float(np.std(fold_pr_auc)),
+            "test_always_safe_accuracy": float(1 - test_last["label"].mean()),
+        }
         metrics.update({f"cv_{k}": v for k, v in cv.items()})
         metrics.update({f"cv_default05_{k}": v for k, v in cv_default.items()})
         metrics.update({f"test_{k}": v for k, v in test_scores.items()})
@@ -250,77 +290,119 @@ def main(model_type_override: str | None = None) -> dict:
         # shows where this model works and where it does not.
         per_subset = evaluate_on_test_sets(model, threshold, features)
         for subset, scores in per_subset.items():
-            metrics.update({f"test_{subset}_recall": scores["recall"],
-                            f"test_{subset}_pr_auc": scores["pr_auc"]})
+            metrics.update(
+                {
+                    f"test_{subset}_recall": scores["recall"],
+                    f"test_{subset}_pr_auc": scores["pr_auc"],
+                }
+            )
         mlflow.log_metrics(metrics)
 
         # ---- 4. Artifacts: plots and tables ----
-        plot_pr_curve(y, oof_prob, threshold, ARTIFACT_DIR / "pr_curve_cv.png",
-                      f"{model_type}: validation precision-recall")
-        plot_confusion_matrix(test_last["label"], test_prob, threshold,
-                              ARTIFACT_DIR / "confusion_matrix_test.png",
-                              f"{model_type}: test set ({len(test_last)} engines, {data_name})")
+        plot_pr_curve(
+            y,
+            oof_prob,
+            threshold,
+            ARTIFACT_DIR / "pr_curve_cv.png",
+            f"{model_type}: validation precision-recall",
+        )
+        plot_confusion_matrix(
+            test_last["label"],
+            test_prob,
+            threshold,
+            ARTIFACT_DIR / "confusion_matrix_test.png",
+            f"{model_type}: test set ({len(test_last)} engines, {data_name})",
+        )
         imp = feature_importance(model, model_type, features)
         imp.to_csv(ARTIFACT_DIR / "feature_importance.csv", index=False)
         save_importance_plot(imp, ARTIFACT_DIR / "feature_importance.png")
         sample = X.sample(500, random_state=seed)
         has_shap = save_shap_plot(model, model_type, sample, ARTIFACT_DIR / "shap_summary.png")
-        for name in ["pr_curve_cv.png", "confusion_matrix_test.png",
-                     "feature_importance.csv", "feature_importance.png"] + (
-                        ["shap_summary.png"] if has_shap else []):
+        for name in [
+            "pr_curve_cv.png",
+            "confusion_matrix_test.png",
+            "feature_importance.csv",
+            "feature_importance.png",
+        ] + (["shap_summary.png"] if has_shap else []):
             mlflow.log_artifact(str(ARTIFACT_DIR / name), artifact_path="evaluation")
 
         # Drift baseline: decile bins of each RAW sensor, one set per training
         # subset. Stored in the same run as the model, so every model version
         # carries the description of the data it was trained on.
         bins = int(params["monitoring"]["psi_bins"])
-        baseline = {s: build_baseline(train[train["subset"] == s], feat["sensors"], bins)
-                    for s in subsets}
+        baseline = {
+            s: build_baseline(train[train["subset"] == s], feat["sensors"], bins) for s in subsets
+        }
         mlflow.log_dict(baseline, "drift/baseline.json")
 
         # ---- 5. Log and register the model ----
         # pyfunc_predict_fn="predict_proba": when served, the model returns
         # probabilities, and the API applies the threshold stored with it.
         info = mlflow.sklearn.log_model(
-            sk_model=model, name="model",
+            sk_model=model,
+            name="model",
             signature=infer_signature(X.head(5), model.predict_proba(X.head(5))),
             input_example=X.head(3),
             pyfunc_predict_fn="predict_proba",
             skops_trusted_types=TRUSTED_TYPES.get(model_type),
             registered_model_name=mcfg["registered_model_name"],
-            metadata={"threshold": threshold, "features": features,
-                      "window": feat["window"], "model_type": model_type})
+            metadata={
+                "threshold": threshold,
+                "features": features,
+                "window": feat["window"],
+                "model_type": model_type,
+            },
+        )
         version = info.registered_model_version
         client = MlflowClient()
         client.set_registered_model_alias(mcfg["registered_model_name"], "challenger", version)
-        for key, value in {"threshold": f"{threshold:.6f}", "model_type": model_type,
-                           "test_recall": f"{test_scores['recall']:.3f}",
-                           "test_pr_auc": f"{test_scores['pr_auc']:.3f}",
-                           "train_subsets": data_name,
-                           "git_commit": git_commit()}.items():
+        for key, value in {
+            "threshold": f"{threshold:.6f}",
+            "model_type": model_type,
+            "test_recall": f"{test_scores['recall']:.3f}",
+            "test_pr_auc": f"{test_scores['pr_auc']:.3f}",
+            "train_subsets": data_name,
+            "git_commit": git_commit(),
+        }.items():
             client.set_model_version_tag(mcfg["registered_model_name"], version, key, value)
 
     # ---- 6. Local copy for DVC versioning, and a small report ----
     if LOCAL_MODEL_DIR.exists():
         shutil.rmtree(LOCAL_MODEL_DIR)
-    mlflow.sklearn.save_model(model, str(LOCAL_MODEL_DIR), pyfunc_predict_fn="predict_proba",
-                              skops_trusted_types=TRUSTED_TYPES.get(model_type),
-                              metadata={"threshold": threshold, "features": features})
-    report = {"run_id": run.info.run_id, "model_type": model_type, "model_version": version,
-              **{k: round(float(v), 4) for k, v in metrics.items()}}
+    mlflow.sklearn.save_model(
+        model,
+        str(LOCAL_MODEL_DIR),
+        pyfunc_predict_fn="predict_proba",
+        skops_trusted_types=TRUSTED_TYPES.get(model_type),
+        metadata={"threshold": threshold, "features": features},
+    )
+    report = {
+        "run_id": run.info.run_id,
+        "model_type": model_type,
+        "model_version": version,
+        **{k: round(float(v), 4) for k, v in metrics.items()},
+    }
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2))
 
     logger.info("Run %s | model version %s (alias: challenger)", run.info.run_id, version)
-    logger.info("Test: recall %.3f, precision %.3f, PR-AUC %.3f",
-                test_scores["recall"], test_scores["precision"], test_scores["pr_auc"])
+    logger.info(
+        "Test: recall %.3f, precision %.3f, PR-AUC %.3f",
+        test_scores["recall"],
+        test_scores["precision"],
+        test_scores["pr_auc"],
+    )
     return report
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train and track a failure classifier")
-    parser.add_argument("--model-type", choices=MODEL_TYPES, default=None,
-                        help="overrides train.model_type in params.yaml")
+    parser.add_argument(
+        "--model-type",
+        choices=MODEL_TYPES,
+        default=None,
+        help="overrides train.model_type in params.yaml",
+    )
     args = parser.parse_args()
 
     # Run the stage and report the outcome to Prometheus (via the Pushgateway),
@@ -331,9 +413,15 @@ if __name__ == "__main__":
     except Exception:
         push_stage_metrics("train", time.perf_counter() - started, success=False)
         raise
-    push_stage_metrics("train", time.perf_counter() - started, success=True,
-                       values={"model_version": result["model_version"],
-                               "test_recall": result["test_recall"],
-                               "test_precision": result["test_precision"],
-                               "test_pr_auc": result["test_pr_auc"],
-                               "threshold": result["threshold"]})
+    push_stage_metrics(
+        "train",
+        time.perf_counter() - started,
+        success=True,
+        values={
+            "model_version": result["model_version"],
+            "test_recall": result["test_recall"],
+            "test_precision": result["test_precision"],
+            "test_pr_auc": result["test_pr_auc"],
+            "threshold": result["threshold"],
+        },
+    )

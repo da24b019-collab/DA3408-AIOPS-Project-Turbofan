@@ -34,11 +34,23 @@ stages:
 def make_project(tmp_path):
     (tmp_path / "dvc.yaml").write_text(DVC_YAML)
     (tmp_path / "reports").mkdir()
-    (tmp_path / "reports" / "ingest_report.json").write_text(json.dumps(
-        {"subsets": {"FD001": {"train": {"rows": 100, "engines": 2},
-                               "test": {"rows": 50, "engines": 2}}}}))
-    (tmp_path / "reports" / "features_report.json").write_text(json.dumps(
-        {"total_rows": 150, "processing_seconds": 3.0, "rows_per_second": 50, "extra": "x"}))
+    (tmp_path / "reports" / "ingest_report.json").write_text(
+        json.dumps(
+            {
+                "subsets": {
+                    "FD001": {
+                        "train": {"rows": 100, "engines": 2},
+                        "test": {"rows": 50, "engines": 2},
+                    }
+                }
+            }
+        )
+    )
+    (tmp_path / "reports" / "features_report.json").write_text(
+        json.dumps(
+            {"total_rows": 150, "processing_seconds": 3.0, "rows_per_second": 50, "extra": "x"}
+        )
+    )
     return tmp_path
 
 
@@ -51,17 +63,22 @@ def test_stages_and_arrows(tmp_path):
 
 
 def test_stage_metrics_are_extracted(tmp_path):
-    stages = {s["name"]: s for s in pipeline_status(make_project(tmp_path),
-                                                    run_dvc_status=False)["stages"]}
+    stages = {
+        s["name"]: s
+        for s in pipeline_status(make_project(tmp_path), run_dvc_status=False)["stages"]
+    }
     assert stages["ingest"]["metrics"] == {"total_rows": 150, "engines": 4}
     assert stages["features"]["metrics"]["rows_per_second"] == 50
-    assert "extra" not in stages["features"]["metrics"]   # only the chosen keys
-    assert stages["features"]["status"] == "unknown"      # DVC status not run in this test
+    assert "extra" not in stages["features"]["metrics"]  # only the chosen keys
+    assert stages["features"]["status"] == "unknown"  # DVC status not run in this test
 
 
 def test_missing_dvc_yaml(tmp_path):
     assert pipeline_status(tmp_path, run_dvc_status=False) == {
-        "stages": [], "edges": [], "dvc_available": False}
+        "stages": [],
+        "edges": [],
+        "dvc_available": False,
+    }
 
 
 def test_log_events_keep_only_warnings_and_errors(tmp_path):
@@ -69,9 +86,10 @@ def test_log_events_keep_only_warnings_and_errors(tmp_path):
         "2026-11-07 10:00:00,000 | INFO     | api | all fine\n"
         "2026-11-07 10:00:01,000 | WARNING  | api | slow request\n"
         "2026-11-07 10:00:02,000 | ERROR    | api | model server down\n"
-        "a line that is not in our log format\n")
+        "a line that is not in our log format\n"
+    )
     events = recent_log_events(tmp_path, limit=10)
-    assert [e["level"] for e in events] == ["ERROR", "WARNING"]   # newest first
+    assert [e["level"] for e in events] == ["ERROR", "WARNING"]  # newest first
     assert events[0]["message"] == "model server down"
 
 

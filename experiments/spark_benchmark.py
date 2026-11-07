@@ -90,12 +90,19 @@ def main():
             time_spark(spark, path)  # warm-up run, so Spark's first-job costs are not counted
             pandas_s = time_pandas(path)
             spark_s = time_spark(spark, path)
-            results.append({
-                "scale": factor, "rows": rows,
-                "pandas_seconds": round(pandas_s, 2), "spark_seconds": round(spark_s, 2),
-                "pandas_rows_per_s": round(rows / pandas_s), "spark_rows_per_s": round(rows / spark_s),
-            })
-            print(f"x{factor:<3} {rows:>10,} rows | pandas {pandas_s:6.2f} s | spark {spark_s:6.2f} s")
+            results.append(
+                {
+                    "scale": factor,
+                    "rows": rows,
+                    "pandas_seconds": round(pandas_s, 2),
+                    "spark_seconds": round(spark_s, 2),
+                    "pandas_rows_per_s": round(rows / pandas_s),
+                    "spark_rows_per_s": round(rows / spark_s),
+                }
+            )
+            print(
+                f"x{factor:<3} {rows:>10,} rows | pandas {pandas_s:6.2f} s | spark {spark_s:6.2f} s"
+            )
     finally:
         spark.stop()
 

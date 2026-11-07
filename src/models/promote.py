@@ -53,8 +53,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Approve or roll back the served model")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--approve", action="store_true", help="promote challenger to champion")
-    group.add_argument("--rollback", type=str, metavar="VERSION",
-                       help="make an earlier version champion")
+    group.add_argument(
+        "--rollback", type=str, metavar="VERSION", help="make an earlier version champion"
+    )
     args = parser.parse_args()
 
     cfg = load_params()["mlflow"]
@@ -76,10 +77,14 @@ def main() -> None:
             result = compare_versions(name, champion.version, challenger.version, max_drop)
             for subset, scores in result["scores"]["challenger"].items():
                 old = result["scores"]["champion"][subset]
-                print(f"  {subset}: recall {old['recall']:.3f} -> {scores['recall']:.3f}, "
-                      f"PR-AUC {old['pr_auc']:.3f} -> {scores['pr_auc']:.3f}")
+                print(
+                    f"  {subset}: recall {old['recall']:.3f} -> {scores['recall']:.3f}, "
+                    f"PR-AUC {old['pr_auc']:.3f} -> {scores['pr_auc']:.3f}"
+                )
             for check in result["checks"]:
-                print(f"  [{'PASS' if check['passed'] else 'FAIL'}] {check['name']}: {check['detail']}")
+                print(
+                    f"  [{'PASS' if check['passed'] else 'FAIL'}] {check['name']}: {check['detail']}"
+                )
             if not result["approvable"]:
                 raise SystemExit("Approval refused: a check failed.")
         client.set_registered_model_alias(name, "champion", challenger.version)

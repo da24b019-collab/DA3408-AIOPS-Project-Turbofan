@@ -52,21 +52,34 @@ def main():
         "FD002 test (new conditions)": "test_FD002.parquet",
     }
     # Split each file into a list of engines once, so windows are quick to build
-    engines = {name: [g for _, g in pd.read_parquet(FEATURES_DIR / f).groupby("unit")]
-               for name, f in cases.items()}
+    engines = {
+        name: [g for _, g in pd.read_parquet(FEATURES_DIR / f).groupby("unit")]
+        for name, f in cases.items()
+    }
 
-    print(f"Max PSI over {len(sensors)} sensors, {REPEATS} random windows per case, "
-          f"threshold {threshold}\n")
-    print(f"{'case':30s} {'rows':>5s} {'min':>6s} {'median':>6s} {'p95':>6s} {'max':>6s} "
-          f"{'above threshold':>16s}")
+    print(
+        f"Max PSI over {len(sensors)} sensors, {REPEATS} random windows per case, "
+        f"threshold {threshold}\n"
+    )
+    print(
+        f"{'case':30s} {'rows':>5s} {'min':>6s} {'median':>6s} {'p95':>6s} {'max':>6s} "
+        f"{'above threshold':>16s}"
+    )
     for n_rows in WINDOW_SIZES:
         for name in cases:
-            values = np.array([max(psi_per_sensor(baseline, random_window(engines[name],
-                                                                            n_rows, rng)).values())
-                               for _ in range(REPEATS)])
-            print(f"{name:30s} {n_rows:5d} {values.min():6.2f} {np.median(values):6.2f} "
-                  f"{np.percentile(values, 95):6.2f} {values.max():6.2f} "
-                  f"{(values > threshold).mean():15.0%}")
+            values = np.array(
+                [
+                    max(
+                        psi_per_sensor(baseline, random_window(engines[name], n_rows, rng)).values()
+                    )
+                    for _ in range(REPEATS)
+                ]
+            )
+            print(
+                f"{name:30s} {n_rows:5d} {values.min():6.2f} {np.median(values):6.2f} "
+                f"{np.percentile(values, 95):6.2f} {values.max():6.2f} "
+                f"{(values > threshold).mean():15.0%}"
+            )
         print()
 
 

@@ -31,8 +31,9 @@ def pushgateway_url() -> str:
     return os.getenv("PUSHGATEWAY_URL", load_params()["monitoring"]["pushgateway_url"])
 
 
-def push_stage_metrics(stage: str, duration_seconds: float, success: bool,
-                       values: dict = None) -> bool:
+def push_stage_metrics(
+    stage: str, duration_seconds: float, success: bool, values: dict = None
+) -> bool:
     """
     Push one stage's results, for example:
         push_stage_metrics("train", 52.3, True, {"test_recall": 0.94})
@@ -43,13 +44,18 @@ def push_stage_metrics(stage: str, duration_seconds: float, success: bool,
         pdm_train_test_recall{job="pdm_train"}                 0.94
     Returns True if the push worked.
     """
-    registry = CollectorRegistry()   # a fresh registry: only this stage's values are sent
-    Gauge("pdm_pipeline_stage_duration_seconds", "How long the stage ran",
-          registry=registry).set(duration_seconds)
-    Gauge("pdm_pipeline_stage_success", "1 if the stage finished without error",
-          registry=registry).set(1 if success else 0)
-    Gauge("pdm_pipeline_stage_last_run_timestamp", "When the stage last finished (unix time)",
-          registry=registry).set(time.time())
+    registry = CollectorRegistry()  # a fresh registry: only this stage's values are sent
+    Gauge("pdm_pipeline_stage_duration_seconds", "How long the stage ran", registry=registry).set(
+        duration_seconds
+    )
+    Gauge(
+        "pdm_pipeline_stage_success", "1 if the stage finished without error", registry=registry
+    ).set(1 if success else 0)
+    Gauge(
+        "pdm_pipeline_stage_last_run_timestamp",
+        "When the stage last finished (unix time)",
+        registry=registry,
+    ).set(time.time())
     for name, value in (values or {}).items():
         Gauge(f"pdm_{stage}_{name}", f"{stage} stage: {name}", registry=registry).set(float(value))
 
@@ -58,6 +64,6 @@ def push_stage_metrics(stage: str, duration_seconds: float, success: bool,
         push_to_gateway(url, job=f"pdm_{stage}", registry=registry, timeout=5)
         logger.info("Pushed %s metrics to the Pushgateway at %s", stage, url)
         return True
-    except OSError as err:   # connection refused, timeout, DNS failure
+    except OSError as err:  # connection refused, timeout, DNS failure
         logger.warning("Pushgateway not reachable at %s (%s): metrics not pushed", url, err)
         return False

@@ -29,9 +29,12 @@ STATUS_STYLE = {  # fill colour and word for each stage status
 
 def dag_dot(status: dict) -> str:
     """Graphviz description of the pipeline: one box per stage, arrows between them."""
-    lines = ['digraph pipeline {', 'rankdir=LR;',
-             'node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];',
-             '"data/raw.dvc" [label="Raw NASA data\\n(DVC tracked)", fillcolor="#F2F5F9"];']
+    lines = [
+        "digraph pipeline {",
+        "rankdir=LR;",
+        'node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];',
+        '"data/raw.dvc" [label="Raw NASA data\\n(DVC tracked)", fillcolor="#F2F5F9"];',
+    ]
     for stage in status["stages"]:
         fill, word = STATUS_STYLE[stage["status"]]
         lines.append(f'"{stage["name"]}" [label="{stage["name"]}\\n({word})", fillcolor="{fill}"];')
@@ -50,39 +53,54 @@ def stage_cards(stages: list) -> None:
             st.markdown(f"**{stage['name']}**")
             if "rows_per_second" in m:
                 st.metric("Throughput", f"{m['rows_per_second']:,} rows/s")
-                st.caption(f"{m['total_rows']:,} rows in {m['processing_seconds']} s "
-                           f"(+ {m.get('spark_startup_seconds', 0)} s Spark start-up)")
+                st.caption(
+                    f"{m['total_rows']:,} rows in {m['processing_seconds']} s "
+                    f"(+ {m.get('spark_startup_seconds', 0)} s Spark start-up)"
+                )
             elif "total_rows" in m:
                 st.metric("Rows ingested", f"{m['total_rows']:,}")
                 st.caption(f"{m.get('engines', 0):,} engines across all subsets")
             elif "test_recall" in m:
                 st.metric("Test recall", f"{m['test_recall']:.2f}")
-                st.caption(f"{m.get('model_type', '')} · version {m.get('model_version', '?')} "
-                           f"· trained in {m.get('train_seconds', '?')} s")
+                st.caption(
+                    f"{m.get('model_type', '')} · version {m.get('model_version', '?')} "
+                    f"· trained in {m.get('train_seconds', '?')} s"
+                )
             last = (stage["last_run"] or "never")[:16].replace("T", " ")
             st.caption(f"Last run: {last}")
 
 
 def runs_table(runs: list) -> pd.DataFrame:
-    icon = {"FINISHED": "✅ finished", "FAILED": "❌ failed",
-            "RUNNING": "⏳ running", "KILLED": "⛔ stopped"}
-    return pd.DataFrame([{
-        "Started": r["start_time"][:16].replace("T", " "),
-        "Run": r["run_name"],
-        "Status": icon.get(r["status"], r["status"]),
-        "Model version": r["model_version"] or "-",
-        "Label": ", ".join(r["aliases"]) or "",
-        "Duration (s)": r["duration_seconds"],
-        "Test recall": r["test_recall"],
-        "Test PR-AUC": r["test_pr_auc"],
-        "Git commit": r["git_commit"],
-    } for r in runs])
+    icon = {
+        "FINISHED": "✅ finished",
+        "FAILED": "❌ failed",
+        "RUNNING": "⏳ running",
+        "KILLED": "⛔ stopped",
+    }
+    return pd.DataFrame(
+        [
+            {
+                "Started": r["start_time"][:16].replace("T", " "),
+                "Run": r["run_name"],
+                "Status": icon.get(r["status"], r["status"]),
+                "Model version": r["model_version"] or "-",
+                "Label": ", ".join(r["aliases"]) or "",
+                "Duration (s)": r["duration_seconds"],
+                "Test recall": r["test_recall"],
+                "Test PR-AUC": r["test_pr_auc"],
+                "Git commit": r["git_commit"],
+            }
+            for r in runs
+        ]
+    )
 
 
 def render() -> None:
     st.title("Pipeline status")
-    st.markdown("How the data flows from raw files to the deployed model, how fast each "
-                "step runs, and the history of training runs.")
+    st.markdown(
+        "How the data flows from raw files to the deployed model, how fast each "
+        "step runs, and the history of training runs."
+    )
     if st.button("Refresh"):
         st.rerun()
     client = ApiClient()
@@ -94,8 +112,10 @@ def render() -> None:
         st.graphviz_chart(dag_dot(status), use_container_width=True)
         if not status["dvc_available"]:
             st.caption("DVC is not available to the backend, so stage status is unknown.")
-        st.caption("Green = up to date. Amber = its inputs changed since the last run "
-                   "(run `dvc repro` to update).")
+        st.caption(
+            "Green = up to date. Amber = its inputs changed since the last run "
+            "(run `dvc repro` to update)."
+        )
         stage_cards(status["stages"])
     except ApiError as err:
         show_api_error(err)
@@ -111,10 +131,16 @@ def render() -> None:
             c1.metric("Runs shown", len(runs))
             c2.metric("Successful", finished)
             c3.metric("Failed", failed)
-            st.dataframe(runs_table(runs), hide_index=True, use_container_width=True,
-                         column_config={"Label": st.column_config.TextColumn(width="medium"),
-                                        "Test PR-AUC": st.column_config.NumberColumn(format="%.3f"),
-                                        "Test recall": st.column_config.NumberColumn(format="%.2f")})
+            st.dataframe(
+                runs_table(runs),
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Label": st.column_config.TextColumn(width="medium"),
+                    "Test PR-AUC": st.column_config.NumberColumn(format="%.3f"),
+                    "Test recall": st.column_config.NumberColumn(format="%.2f"),
+                },
+            )
         else:
             st.info("No training runs recorded yet.")
     except ApiError as err:
@@ -125,8 +151,11 @@ def render() -> None:
     try:
         events = client.recent_logs(limit=30)["events"]
         if events:
-            st.dataframe(pd.DataFrame(events)[["time", "level", "source", "message", "file"]],
-                         hide_index=True, use_container_width=True)
+            st.dataframe(
+                pd.DataFrame(events)[["time", "level", "source", "message", "file"]],
+                hide_index=True,
+                use_container_width=True,
+            )
         else:
             st.success("No warnings or errors in the logs.")
     except ApiError as err:

@@ -1,0 +1,10 @@
+# Code style settings (Task 10: code quality).
+#   black  formats the code the same way everywhere (no style arguments)
+#   flake8 reports likely mistakes: unused imports, undefined names, very long lines
+# Check the whole project:   black --check . && flake8
+# Format the whole project:  black .
+
+[tool.black]
+line-length = 100
+target-version = ["py314"]
+extend-exclude = "(mlflow_data|tmp|notebooks)/"

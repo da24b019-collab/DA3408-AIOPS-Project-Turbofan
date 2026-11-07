@@ -28,8 +28,10 @@ def main():
             # "noop" = compute everything but write nothing (we only want the job to show up)
             add_rolling_features(sdf, sensors, window).write.format("noop").mode("overwrite").save()
             print(f"Finished job for train_{subset}")
-        input("\nAll jobs done. Open the Spark UI in Firefox now.\n"
-              "Press Enter here when you have finished taking screenshots... ")
+        input(
+            "\nAll jobs done. Open the Spark UI in Firefox now.\n"
+            "Press Enter here when you have finished taking screenshots... "
+        )
     finally:
         spark.stop()
         print("Spark stopped.")

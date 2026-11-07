@@ -26,8 +26,8 @@ from src.config import PROJECT_ROOT, RAW_COLUMNS
 INTERIM = PROJECT_ROOT / "data" / "interim"
 OUT = PROJECT_ROOT / "samples"
 
-AT_RISK_UNITS = [18, 20, 31, 34, 35]   # true remaining life at last cycle <= 30
-SAFE_UNITS = [1, 2, 3, 17, 21]         # true remaining life at last cycle > 30
+AT_RISK_UNITS = [18, 20, 31, 34, 35]  # true remaining life at last cycle <= 30
+SAFE_UNITS = [1, 2, 3, 17, 21]  # true remaining life at last cycle > 30
 
 
 DRIFT_DEMO_ROWS = 3000
@@ -63,10 +63,14 @@ def main():
     bad.to_csv(OUT / "bad_missing_column.csv", index=False)
 
     fd003 = pd.read_parquet(INTERIM / "test_FD003.parquet")
-    for name, data in [("drift_fd001_normal.csv", fd001), ("drift_fd002_conditions.csv", fd002),
-                       ("drift_fd003_fault.csv", fd003)]:
+    for name, data in [
+        ("drift_fd001_normal.csv", fd001),
+        ("drift_fd002_conditions.csv", fd002),
+        ("drift_fd003_fault.csv", fd003),
+    ]:
         raw_columns_only(first_engines_with_rows(data, DRIFT_DEMO_ROWS)).to_csv(
-            OUT / name, index=False)
+            OUT / name, index=False
+        )
 
     for path in sorted(OUT.glob("*.csv")):
         rows = sum(1 for _ in open(path)) - 1

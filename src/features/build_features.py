@@ -43,8 +43,7 @@ def create_spark_session(spark_params: dict) -> SparkSession:
     os.environ["PYSPARK_DRIVER_PYTHON"] = sys.executable
 
     spark = (
-        SparkSession.builder
-        .appName("turbofan-feature-engineering")
+        SparkSession.builder.appName("turbofan-feature-engineering")
         .master(spark_params["master"])
         .config("spark.driver.memory", spark_params["driver_memory"])
         .config("spark.sql.shuffle.partitions", str(spark_params["shuffle_partitions"]))
@@ -82,8 +81,9 @@ def add_rolling_features(sdf: DataFrame, sensors: list, window: int) -> DataFram
     return sdf.select("*", *new_columns)
 
 
-def process_table(spark: SparkSession, in_path: Path, out_path: Path,
-                  sensors: list, window: int) -> int:
+def process_table(
+    spark: SparkSession, in_path: Path, out_path: Path, sensors: list, window: int
+) -> int:
     """Read one table, add features, keep only the needed columns, write it out."""
     sdf = spark.read.parquet(str(in_path))
     sdf = add_rolling_features(sdf, sensors, window)
@@ -109,16 +109,24 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Features: %d sensors, window %d -> %d model inputs",
-                len(sensors), window, len(feature_names(sensors, window)))
+    logger.info(
+        "Features: %d sensors, window %d -> %d model inputs",
+        len(sensors),
+        window,
+        len(feature_names(sensors, window)),
+    )
 
     start = time.perf_counter()
     spark = create_spark_session(params["spark"])
     startup_seconds = time.perf_counter() - start
     logger.info("Spark %s started in %.1f s", spark.version, startup_seconds)
 
-    report = {"spark_version": spark.version, "sensors": len(sensors),
-              "window": window, "tables": {}}
+    report = {
+        "spark_version": spark.version,
+        "sensors": len(sensors),
+        "window": window,
+        "tables": {},
+    }
     total_rows = 0
     work_start = time.perf_counter()
     try:
@@ -126,8 +134,9 @@ def main() -> None:
             for split in ["train", "test"]:
                 name = f"{split}_{subset}"
                 t0 = time.perf_counter()
-                rows = process_table(spark, in_dir / f"{name}.parquet",
-                                     out_dir / f"{name}.parquet", sensors, window)
+                rows = process_table(
+                    spark, in_dir / f"{name}.parquet", out_dir / f"{name}.parquet", sensors, window
+                )
                 seconds = time.perf_counter() - t0
                 total_rows += rows
                 report["tables"][name] = {"rows": rows, "seconds": round(seconds, 2)}
@@ -148,13 +157,24 @@ def main() -> None:
 
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
-    logger.info("Done: %d rows in %.1f s (%d rows/s). Report: %s",
-                total_rows, work_seconds, report["rows_per_second"], REPORT_PATH)
+    logger.info(
+        "Done: %d rows in %.1f s (%d rows/s). Report: %s",
+        total_rows,
+        work_seconds,
+        report["rows_per_second"],
+        REPORT_PATH,
+    )
     # Monitoring: Prometheus gets the run time and throughput via the Pushgateway
-    push_stage_metrics("features", time.perf_counter() - start, success=True,
-                       values={"rows_total": total_rows,
-                               "rows_per_second": report["rows_per_second"],
-                               "spark_startup_seconds": startup_seconds})
+    push_stage_metrics(
+        "features",
+        time.perf_counter() - start,
+        success=True,
+        values={
+            "rows_total": total_rows,
+            "rows_per_second": report["rows_per_second"],
+            "spark_startup_seconds": startup_seconds,
+        },
+    )
 
 
 if __name__ == "__main__":

@@ -19,16 +19,31 @@ from views.predict import probability_text, results_table  # noqa: E402
 
 
 def engine(unit, prob, level, warnings=()):
-    return {"unit": unit, "failure_probability": prob, "risk_level": level,
-            "cycles_received": 20, "last_cycle": 20, "warnings": list(warnings),
-            "explanation": {"summary": "", "top_factors": [
-                {"sensor": "s11", "description": "HPC outlet static pressure (Ps30)",
-                 "effect": "raises risk", "contribution": 1.0}]}}
+    return {
+        "unit": unit,
+        "failure_probability": prob,
+        "risk_level": level,
+        "cycles_received": 20,
+        "last_cycle": 20,
+        "warnings": list(warnings),
+        "explanation": {
+            "summary": "",
+            "top_factors": [
+                {
+                    "sensor": "s11",
+                    "description": "HPC outlet static pressure (Ps30)",
+                    "effect": "raises risk",
+                    "contribution": 1.0,
+                }
+            ],
+        },
+    }
 
 
 def test_results_are_sorted_riskiest_first():
-    table = results_table({"engines": [engine(1, 0.1, "low"), engine(2, 0.9, "high"),
-                                       engine(3, 0.4, "medium")]})
+    table = results_table(
+        {"engines": [engine(1, 0.1, "low"), engine(2, 0.9, "high"), engine(3, 0.4, "medium")]}
+    )
     assert list(table["Engine"]) == [2, 3, 1]
 
 
@@ -48,9 +63,13 @@ def test_probability_never_claims_certainty(prob, text):
 
 
 def test_pipeline_diagram_has_every_stage_and_arrow():
-    status = {"stages": [{"name": "ingest", "status": "up_to_date"},
-                         {"name": "train", "status": "changed"}],
-              "edges": [["data/raw.dvc", "ingest"], ["ingest", "train"]]}
+    status = {
+        "stages": [
+            {"name": "ingest", "status": "up_to_date"},
+            {"name": "train", "status": "changed"},
+        ],
+        "edges": [["data/raw.dvc", "ingest"], ["ingest", "train"]],
+    }
     dot = dag_dot(status)
     assert '"ingest" -> "train";' in dot
     assert "needs re-run" in dot  # the changed stage is labelled
@@ -65,10 +84,18 @@ def test_unreachable_backend_gives_friendly_error():
 
 
 def drift_status(state, max_psi=None, sensor_psi=None):
-    return {"state": state, "n_rows": 1200, "min_rows": 3000, "window_rows": 5000,
-            "threshold": 1.0, "max_psi": max_psi, "worst_sensor": "s11",
-            "baseline_model_version": "7", "drift_detected": state == "drift",
-            "sensor_psi": sensor_psi or {}}
+    return {
+        "state": state,
+        "n_rows": 1200,
+        "min_rows": 3000,
+        "window_rows": 5000,
+        "threshold": 1.0,
+        "max_psi": max_psi,
+        "worst_sensor": "s11",
+        "baseline_model_version": "7",
+        "drift_detected": state == "drift",
+        "sensor_psi": sensor_psi or {},
+    }
 
 
 def test_drift_messages_for_each_state():
@@ -87,14 +114,28 @@ def test_psi_table_sorted_with_verdicts():
 
 def test_comparison_table_has_one_row_per_test_set():
     from views.model import comparison_table
-    def s(r): return {sub: {"recall": r, "pr_auc": r} for sub in ["FD001", "FD002", "FD003", "FD004"]}
+
+    def s(r):
+        return {sub: {"recall": r, "pr_auc": r} for sub in ["FD001", "FD002", "FD003", "FD004"]}
+
     table = comparison_table({"scores": {"champion": s(0.8), "challenger": s(0.9)}})
     assert len(table) == 4 and table["Recall (challenger)"].iloc[0] == 0.9
 
 
 def test_jobs_table_columns():
     from views.monitoring import jobs_table
-    table = jobs_table([{"id": 1, "kind": "retrain", "status": "queued", "reason": "DataDrift alert",
-                         "created_at": "2026-11-07T16:16:58+05:30", "detail": ""}])
+
+    table = jobs_table(
+        [
+            {
+                "id": 1,
+                "kind": "retrain",
+                "status": "queued",
+                "reason": "DataDrift alert",
+                "created_at": "2026-11-07T16:16:58+05:30",
+                "detail": "",
+            }
+        ]
+    )
     assert list(table.columns) == ["Job", "Kind", "Status", "Reason", "Created", "Result"]
     assert table["Created"].iloc[0] == "2026-11-07 16:16:58"

@@ -23,8 +23,15 @@ import yaml
 STAGE_METRIC_KEYS = {
     "ingest": [],  # nested per subset; summarised separately below
     "features": ["total_rows", "processing_seconds", "rows_per_second", "spark_startup_seconds"],
-    "train": ["model_type", "model_version", "train_seconds", "test_recall",
-              "test_precision", "test_pr_auc", "threshold"],
+    "train": [
+        "model_type",
+        "model_version",
+        "train_seconds",
+        "test_recall",
+        "test_precision",
+        "test_pr_auc",
+        "threshold",
+    ],
 }
 LOG_LINE = re.compile(r"^(\S+ \S+) \| (\w+)\s*\| (\S+) \| (.*)$")
 _status_cache = {"time": 0.0, "value": None}
@@ -34,7 +41,7 @@ STATUS_CACHE_SECONDS = 30
 def _read_json(path: Path):
     try:
         return json.loads(path.read_text())
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 
@@ -58,10 +65,15 @@ def dvc_changed_stages(project_root: Path) -> dict | None:
     if _status_cache["value"] is not None and now - _status_cache["time"] < STATUS_CACHE_SECONDS:
         return _status_cache["value"]
     try:
-        result = subprocess.run(["dvc", "status", "--json"], cwd=project_root,
-                                capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            ["dvc", "status", "--json"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         changed = json.loads(result.stdout or "{}")
-    except (OSError, subprocess.TimeoutExpired, ValueError):
+    except OSError, subprocess.TimeoutExpired, ValueError:
         return None
     _status_cache.update(time=now, value=changed)
     return changed
@@ -88,8 +100,9 @@ def pipeline_status(project_root: Path, run_dvc_status: bool = True) -> dict:
 
     stages = []
     for name, cfg in stages_cfg.items():
-        metrics_files = [next(iter(m)) if isinstance(m, dict) else m
-                         for m in cfg.get("metrics", [])]
+        metrics_files = [
+            next(iter(m)) if isinstance(m, dict) else m for m in cfg.get("metrics", [])
+        ]
         report_path = project_root / metrics_files[0] if metrics_files else None
         report = _read_json(report_path) if report_path else None
         if report is None:
@@ -103,10 +116,22 @@ def pipeline_status(project_root: Path, run_dvc_status: bool = True) -> dict:
             status = "unknown"
         else:
             status = "changed" if name in changed else "up_to_date"
-        last_run = (datetime.fromtimestamp(report_path.stat().st_mtime).astimezone()
-                    .isoformat(timespec="seconds") if report_path and report_path.exists() else None)
-        stages.append({"name": name, "command": cfg.get("cmd", ""), "status": status,
-                       "last_run": last_run, "metrics": metrics})
+        last_run = (
+            datetime.fromtimestamp(report_path.stat().st_mtime)
+            .astimezone()
+            .isoformat(timespec="seconds")
+            if report_path and report_path.exists()
+            else None
+        )
+        stages.append(
+            {
+                "name": name,
+                "command": cfg.get("cmd", ""),
+                "status": status,
+                "last_run": last_run,
+                "metrics": metrics,
+            }
+        )
 
     return {"stages": stages, "edges": edges, "dvc_available": changed is not None}
 
@@ -135,26 +160,31 @@ def mlflow_runs(tracking_uri: str, experiment_name: str, model_name: str, limit:
         versions[mv.run_id] = (str(mv.version), sorted(alias_of_version.get(str(mv.version), [])))
 
     runs = []
-    for run in client.search_runs([experiment.experiment_id], order_by=["start_time DESC"],
-                                  max_results=limit):
+    for run in client.search_runs(
+        [experiment.experiment_id], order_by=["start_time DESC"], max_results=limit
+    ):
         info, data = run.info, run.data
-        duration = ((info.end_time - info.start_time) / 1000
-                    if info.end_time and info.start_time else None)
+        duration = (
+            (info.end_time - info.start_time) / 1000 if info.end_time and info.start_time else None
+        )
         version, aliases = versions.get(info.run_id, (None, []))
-        runs.append({
-            "run_id": info.run_id,
-            "run_name": info.run_name,
-            "status": info.status,  # FINISHED, FAILED, RUNNING or KILLED
-            "start_time": datetime.fromtimestamp(info.start_time / 1000).astimezone()
-                          .isoformat(timespec="seconds"),
-            "duration_seconds": round(duration, 1) if duration is not None else None,
-            "model_type": data.tags.get("model_type"),
-            "git_commit": data.tags.get("git_commit", "")[:10],
-            "test_recall": data.metrics.get("test_recall"),
-            "test_pr_auc": data.metrics.get("test_pr_auc"),
-            "model_version": version,
-            "aliases": aliases,
-        })
+        runs.append(
+            {
+                "run_id": info.run_id,
+                "run_name": info.run_name,
+                "status": info.status,  # FINISHED, FAILED, RUNNING or KILLED
+                "start_time": datetime.fromtimestamp(info.start_time / 1000)
+                .astimezone()
+                .isoformat(timespec="seconds"),
+                "duration_seconds": round(duration, 1) if duration is not None else None,
+                "model_type": data.tags.get("model_type"),
+                "git_commit": data.tags.get("git_commit", "")[:10],
+                "test_recall": data.metrics.get("test_recall"),
+                "test_pr_auc": data.metrics.get("test_pr_auc"),
+                "model_version": version,
+                "aliases": aliases,
+            }
+        )
     return {"experiment": experiment_name, "runs": runs}
 
 
@@ -169,8 +199,14 @@ def recent_log_events(log_dir: Path, limit: int, levels=("WARNING", "ERROR", "CR
         for line in lines:
             match = LOG_LINE.match(line)
             if match and match.group(2) in levels:
-                events.append({"time": match.group(1), "level": match.group(2),
-                               "source": match.group(3), "message": match.group(4),
-                               "file": log_file.name})
+                events.append(
+                    {
+                        "time": match.group(1),
+                        "level": match.group(2),
+                        "source": match.group(3),
+                        "message": match.group(4),
+                        "file": log_file.name,
+                    }
+                )
     events.sort(key=lambda e: e["time"], reverse=True)
     return events[:limit]

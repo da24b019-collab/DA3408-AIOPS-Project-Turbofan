@@ -66,9 +66,12 @@ def read_api_key() -> str:
 def call_backend(method: str, path: str, body: dict = None, timeout: float = 120) -> dict:
     """Send a JSON request to the backend and return the JSON answer."""
     data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(BACKEND_URL + path, data=data, method=method,
-                                     headers={"Content-Type": "application/json",
-                                              "X-API-Key": read_api_key()})
+    request = urllib.request.Request(
+        BACKEND_URL + path,
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/json", "X-API-Key": read_api_key()},
+    )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read() or b"{}")
 
@@ -97,7 +100,7 @@ def set_train_subsets(params_text: str, subsets: list) -> str:
     lines = params_text.splitlines(keepends=True)
     in_train = False
     for i, line in enumerate(lines):
-        if re.match(r"^\S", line):                 # a top-level section starts
+        if re.match(r"^\S", line):  # a top-level section starts
             in_train = line.startswith("train:")
         elif in_train and re.match(r"^  subsets:", line):
             lines[i] = f"  subsets: [{', '.join(subsets)}]\n"
@@ -109,8 +112,10 @@ def set_train_subsets(params_text: str, subsets: list) -> str:
 def do_retrain(job: dict) -> tuple:
     subsets = job["params"]["subsets"]
     if git_has_changes():
-        raise JobFailed("The project has uncommitted changes. Commit or stash them first, "
-                        "so the new model can be traced to an exact commit.")
+        raise JobFailed(
+            "The project has uncommitted changes. Commit or stash them first, "
+            "so the new model can be traced to an exact commit."
+        )
 
     start_commit = run(["git", "rev-parse", "HEAD"])
     params_path = PROJECT_ROOT / "params.yaml"
@@ -138,10 +143,16 @@ def do_retrain(job: dict) -> tuple:
     if git_has_changes():
         run(["git", "commit", "-m", f"Retrain job {job['id']}: model version {version}"])
 
-    detail = (f"Version {version} trained on {'+'.join(subsets)} and registered as "
-              f"challenger (test recall {report['test_recall']:.3f}). Waiting for approval.")
-    return detail, {"model_version": version, "train_subsets": "+".join(subsets),
-                    "test_recall": report["test_recall"], "test_pr_auc": report["test_pr_auc"]}
+    detail = (
+        f"Version {version} trained on {'+'.join(subsets)} and registered as "
+        f"challenger (test recall {report['test_recall']:.3f}). Waiting for approval."
+    )
+    return detail, {
+        "model_version": version,
+        "train_subsets": "+".join(subsets),
+        "test_recall": report["test_recall"],
+        "test_pr_auc": report["test_pr_auc"],
+    }
 
 
 def wait_for_model_server(timeout_seconds: int = 180) -> None:
@@ -166,8 +177,9 @@ def do_deploy(job: dict) -> tuple:
         raise JobFailed(f"Backend serves version {ready['model_version']}, expected {version}")
     if ready["model_server_in_sync"] is False:
         raise JobFailed("The model server and the backend serve different models")
-    return (f"Version {version} is live: model server restarted, backend reloaded, "
-            f"both in sync."), {"model_version": version}
+    return (
+        f"Version {version} is live: model server restarted, backend reloaded, " f"both in sync."
+    ), {"model_version": version}
 
 
 HANDLERS = {"retrain": do_retrain, "deploy": do_deploy}
@@ -183,28 +195,40 @@ def work_once() -> bool:
     try:
         detail, result = HANDLERS[job["kind"]](job)
         succeeded = True
-    except Exception as err:   # any failure is reported, and the worker keeps running
+    except Exception as err:  # any failure is reported, and the worker keeps running
         detail, result, succeeded = str(err), {}, False
     result["seconds"] = round(time.perf_counter() - started, 1)
-    call_backend("POST", f"/jobs/{job['id']}/finish",
-                 {"succeeded": succeeded, "detail": detail, "result": result})
+    call_backend(
+        "POST",
+        f"/jobs/{job['id']}/finish",
+        {"succeeded": succeeded, "detail": detail, "result": result},
+    )
     (logger.info if succeeded else logger.error)(
-        "Job %d %s in %.0f s: %s", job["id"], "succeeded" if succeeded else "FAILED",
-        result["seconds"], detail)
+        "Job %d %s in %.0f s: %s",
+        job["id"],
+        "succeeded" if succeeded else "FAILED",
+        result["seconds"],
+        detail,
+    )
     return True
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Do the retrain and deploy jobs queued in the backend")
+    parser = argparse.ArgumentParser(
+        description="Do the retrain and deploy jobs queued in the backend"
+    )
     parser.add_argument("--once", action="store_true", help="do at most one job, then exit")
     args = parser.parse_args()
 
-    logger.info("Worker started: backend %s, checking every %d s (Ctrl+C to stop)",
-                BACKEND_URL, POLL_SECONDS)
+    logger.info(
+        "Worker started: backend %s, checking every %d s (Ctrl+C to stop)",
+        BACKEND_URL,
+        POLL_SECONDS,
+    )
     while True:
         try:
             did_work = work_once()
-        except urllib.error.HTTPError as err:   # the backend answered, but with an error
+        except urllib.error.HTTPError as err:  # the backend answered, but with an error
             hint = " (is API_KEY in .env the same as the backend's?)" if err.code == 401 else ""
             logger.error("Backend refused the request: HTTP %d%s", err.code, hint)
             did_work = False

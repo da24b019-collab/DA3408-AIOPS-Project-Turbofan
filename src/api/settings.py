@@ -24,8 +24,8 @@ class Settings:
     mlflow_tracking_uri: str
     model_name: str
     model_alias: str
-    model_server_url: str        # "" means: predict with the backend's own model copy
-    api_key: str                 # "" means: no key required (development)
+    model_server_url: str  # "" means: predict with the backend's own model copy
+    api_key: str  # "" means: no key required (development)
     cors_origins: list = field(default_factory=list)
     max_upload_mb: float = 5.0
     max_rows: int = 50_000
@@ -63,8 +63,9 @@ class Settings:
             model_alias=os.getenv("MODEL_ALIAS", "champion"),
             model_server_url=os.getenv("MODEL_SERVER_URL", "http://127.0.0.1:5001").rstrip("/"),
             api_key=os.getenv("API_KEY", ""),
-            cors_origins=_split_csv(os.getenv(
-                "CORS_ORIGINS", "http://localhost:8501,http://localhost:3000")),
+            cors_origins=_split_csv(
+                os.getenv("CORS_ORIGINS", "http://localhost:8501,http://localhost:3000")
+            ),
             max_upload_mb=float(os.getenv("MAX_UPLOAD_MB", "5")),
             max_rows=int(os.getenv("MAX_ROWS", "50000")),
             sensors=list(params["features"]["sensors"]),

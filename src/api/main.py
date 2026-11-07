@@ -87,17 +87,25 @@ ERROR_RESPONSES = {code: {"model": ErrorResponse} for code in (400, 401, 404, 40
 MAX_STORED_ALERTS = 50
 
 
-def create_app(settings: Settings = None, service: ModelService = None,
-               registry: Registry = None, jobs: JobStore = None) -> FastAPI:
+def create_app(
+    settings: Settings = None,
+    service: ModelService = None,
+    registry: Registry = None,
+    jobs: JobStore = None,
+) -> FastAPI:
     """
     Build the app. Tests pass in their own settings and a fake model service,
     so they run without MLflow; in normal use both are created here.
     """
     settings = settings or Settings.from_env()
     service = service or ModelService(settings)
-    drift = DriftMonitor(settings.sensors, settings.drift_threshold,
-                         settings.drift_min_rows, settings.drift_window_rows)
-    received_alerts = deque(maxlen=MAX_STORED_ALERTS)   # newest last
+    drift = DriftMonitor(
+        settings.sensors,
+        settings.drift_threshold,
+        settings.drift_min_rows,
+        settings.drift_window_rows,
+    )
+    received_alerts = deque(maxlen=MAX_STORED_ALERTS)  # newest last
     registry = registry or Registry(settings, settings.max_fd001_drop)
     jobs = jobs or JobStore(settings.jobs_file)
 
@@ -138,13 +146,20 @@ def create_app(settings: Settings = None, service: ModelService = None,
                 logger.error("Start-up without a model: %s", err)
         yield
 
-    app = FastAPI(title="Turbofan Predictive Maintenance API", version="1.0.0",
-                  description="Predicts whether an engine will fail within 30 cycles.",
-                  lifespan=lifespan)
+    app = FastAPI(
+        title="Turbofan Predictive Maintenance API",
+        version="1.0.0",
+        description="Predicts whether an engine will fail within 30 cycles.",
+        lifespan=lifespan,
+    )
     app.state.settings, app.state.service = settings, service
 
-    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
-                       allow_methods=["GET", "POST"], allow_headers=["*"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
 
     # ------------------------------------------------------------ middleware
     @app.middleware("http")
@@ -158,15 +173,16 @@ def create_app(settings: Settings = None, service: ModelService = None,
             response = await call_next(request)
             status = response.status_code
         except Exception:
-            status = 500   # an unexpected error: still count it, then let it be handled
+            status = 500  # an unexpected error: still count it, then let it be handled
             raise
         finally:
             seconds = time.perf_counter() - start
             path = metrics.route_label(request)
             metrics.HTTP_REQUESTS.labels(request.method, path, str(status)).inc()
             metrics.HTTP_LATENCY.labels(request.method, path).observe(seconds)
-        logger.info("%s %s -> %d (%.1f ms)", request.method, request.url.path,
-                    status, seconds * 1000)
+        logger.info(
+            "%s %s -> %d (%.1f ms)", request.method, request.url.path, status, seconds * 1000
+        )
         return response
 
     # -------------------------------------------------------- error handlers
@@ -187,8 +203,9 @@ def create_app(settings: Settings = None, service: ModelService = None,
     async def invalid_request_body(_, exc):
         # Wrong JSON shape (e.g. no "readings" field): same error format as everything else
         metrics.VALIDATION_ERRORS.labels("invalid_request").inc()
-        problems = "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}"
-                             for e in exc.errors())
+        problems = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()
+        )
         return error(422, "invalid_input", f"Invalid request: {problems}")
 
     @app.exception_handler(ModelUnavailableError)
@@ -265,11 +282,16 @@ def create_app(settings: Settings = None, service: ModelService = None,
         server, in_sync = service.model_server_status()
         # Ready only if predictions can succeed AND come from the same model version
         # whose threshold and explanations we use (in_sync is None when not checked)
-        is_ready = (service.is_loaded and server in ("reachable", "not_configured")
-                    and in_sync is not False)
-        body = ReadyResponse(ready=is_ready, model_loaded=service.is_loaded,
-                             model_version=service.info.get("version"),
-                             model_server=server, model_server_in_sync=in_sync)
+        is_ready = (
+            service.is_loaded and server in ("reachable", "not_configured") and in_sync is not False
+        )
+        body = ReadyResponse(
+            ready=is_ready,
+            model_loaded=service.is_loaded,
+            model_version=service.info.get("version"),
+            model_server=server,
+            model_server_in_sync=in_sync,
+        )
         return JSONResponse(status_code=200 if is_ready else 503, content=body.model_dump())
 
     @app.get("/metrics", include_in_schema=False)
@@ -286,55 +308,92 @@ def create_app(settings: Settings = None, service: ModelService = None,
         body, content_type = metrics.metrics_page()
         return Response(content=body, media_type=content_type)
 
-    @app.get("/model/info", response_model=ModelInfoResponse, tags=["model"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/model/info",
+        response_model=ModelInfoResponse,
+        tags=["model"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def model_info():
         if not service.is_loaded:
             raise ModelUnavailableError("No model is loaded.")
         return service.info
 
-    @app.post("/model/reload", response_model=ModelInfoResponse, tags=["model"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/model/reload",
+        response_model=ModelInfoResponse,
+        tags=["model"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def model_reload():
         previous = service.info.get("version")
         info = service.load()
         logger.info("Model reloaded: version %s -> %s", previous, info["version"])
         if service.model_server_status()[1] is False:
-            logger.warning("Model server is NOT serving version %s. Restart it with "
-                           "models:/%s@%s", info["version"], settings.model_name,
-                           settings.model_alias)
+            logger.warning(
+                "Model server is NOT serving version %s. Restart it with " "models:/%s@%s",
+                info["version"],
+                settings.model_name,
+                settings.model_alias,
+            )
         return {**info, "previous_version": previous}
 
-    @app.post("/predict", response_model=PredictionResponse, tags=["prediction"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/predict",
+        response_model=PredictionResponse,
+        tags=["prediction"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def predict(body: PredictRequest):
-        readings = validate_readings(readings_to_frame(body.readings),
-                                     settings.sensors, settings.max_rows)
+        readings = validate_readings(
+            readings_to_frame(body.readings), settings.sensors, settings.max_rows
+        )
         return run_prediction(readings)
 
-    @app.post("/predict/csv", response_model=PredictionResponse, tags=["prediction"],
-              dependencies=protected, responses=ERROR_RESPONSES)
-    async def predict_csv(file: UploadFile = File(..., description="CSV with unit, cycle and sensors")):
+    @app.post(
+        "/predict/csv",
+        response_model=PredictionResponse,
+        tags=["prediction"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
+    async def predict_csv(
+        file: UploadFile = File(..., description="CSV with unit, cycle and sensors")
+    ):
         content = await file.read()
         frame = read_csv_upload(file.filename, content, settings.max_upload_mb)
         readings = validate_readings(frame, settings.sensors, settings.max_rows)
         return run_prediction(readings)
 
-    @app.get("/drift/status", response_model=DriftStatusResponse, tags=["monitoring"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/drift/status",
+        response_model=DriftStatusResponse,
+        tags=["monitoring"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def drift_status():
         sync_drift_baseline()
         return drift.status()
 
-    @app.post("/drift/reset", response_model=DriftStatusResponse, tags=["monitoring"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/drift/reset",
+        response_model=DriftStatusResponse,
+        tags=["monitoring"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def drift_reset():
         drift.reset()
         logger.info("Drift window emptied by request")
         return drift.status()
 
-    @app.post("/alerts/webhook", tags=["monitoring"], dependencies=protected,
-              responses=ERROR_RESPONSES)
+    @app.post(
+        "/alerts/webhook", tags=["monitoring"], dependencies=protected, responses=ERROR_RESPONSES
+    )
     def alerts_webhook(body: AlertmanagerWebhook):
         """Alertmanager calls this when an alert starts firing and when it resolves."""
         for alert in body.alerts:
@@ -348,23 +407,38 @@ def create_app(settings: Settings = None, service: ModelService = None,
                 if drift_now["max_psi"] is not None:
                     reason += f": max PSI {drift_now['max_psi']:.2f} on {drift_now['worst_sensor']}"
                 _, action = queue_retraining(reason, settings.retrain_subsets, trigger="alert")
-            received_alerts.append({
-                "received_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-                "alertname": name, "status": alert.status,
-                "severity": alert.labels.get("severity", "none"),
-                "summary": alert.annotations.get("summary", ""), "action": action})
+            received_alerts.append(
+                {
+                    "received_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                    "alertname": name,
+                    "status": alert.status,
+                    "severity": alert.labels.get("severity", "none"),
+                    "summary": alert.annotations.get("summary", ""),
+                    "action": action,
+                }
+            )
             log = logger.warning if alert.status == "firing" else logger.info
             log("Alert %s %s: %s", name, alert.status, alert.annotations.get("summary", ""))
         return {"received": len(body.alerts)}
 
-    @app.get("/alerts/recent", response_model=AlertsResponse, tags=["monitoring"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/alerts/recent",
+        response_model=AlertsResponse,
+        tags=["monitoring"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def alerts_recent(limit: int = Query(20, ge=1, le=MAX_STORED_ALERTS)):
-        return {"alerts": list(reversed(received_alerts))[:limit]}   # newest first
+        return {"alerts": list(reversed(received_alerts))[:limit]}  # newest first
 
     # ------------------------------------------------------ retraining loop
-    @app.post("/retrain", response_model=JobsResponse, tags=["retraining"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/retrain",
+        response_model=JobsResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def retrain(body: RetrainRequest):
         subsets = body.subsets or list(settings.retrain_subsets)
         job, message = queue_retraining(body.reason, subsets, trigger="manual")
@@ -372,13 +446,23 @@ def create_app(settings: Settings = None, service: ModelService = None,
             raise Conflict(message)
         return {"jobs": [job]}
 
-    @app.get("/jobs", response_model=JobsResponse, tags=["retraining"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/jobs",
+        response_model=JobsResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def list_jobs(limit: int = Query(20, ge=1, le=200)):
         return {"jobs": jobs.list(limit)}
 
-    @app.post("/jobs/claim", response_model=ClaimResponse, tags=["retraining"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/jobs/claim",
+        response_model=ClaimResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def claim_job():
         """Called by the worker every few seconds. Returns {"job": null} when there is no work."""
         job = jobs.claim_next()
@@ -386,8 +470,13 @@ def create_app(settings: Settings = None, service: ModelService = None,
             logger.info("Job %d (%s) claimed by the worker", job["id"], job["kind"])
         return {"job": job}
 
-    @app.post("/jobs/{job_id}/finish", response_model=JobsResponse, tags=["retraining"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/jobs/{job_id}/finish",
+        response_model=JobsResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def finish_job(job_id: int, body: FinishJobRequest):
         try:
             job = jobs.finish(job_id, body.succeeded, body.detail, body.result)
@@ -400,13 +489,23 @@ def create_app(settings: Settings = None, service: ModelService = None,
         log("Job %d (%s) %s: %s", job_id, job["kind"], job["status"], body.detail)
         return {"jobs": [job]}
 
-    @app.get("/model/versions", response_model=VersionsResponse, tags=["retraining"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/model/versions",
+        response_model=VersionsResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def model_versions():
         return {"versions": registry.versions()}
 
-    @app.get("/model/compare", response_model=CompareResponse, tags=["retraining"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/model/compare",
+        response_model=CompareResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def model_compare():
         return registry.compare()
 
@@ -417,12 +516,18 @@ def create_app(settings: Settings = None, service: ModelService = None,
         registry.set_champion(version)
         job = jobs.create("deploy", reason, {"version": version})
         metrics.JOBS_CREATED.labels("deploy", "manual").inc()
-        logger.warning("Champion is now version %s; deploy job %d queued (%s)",
-                       version, job["id"], reason)
+        logger.warning(
+            "Champion is now version %s; deploy job %d queued (%s)", version, job["id"], reason
+        )
         return {"champion_version": version, "job": job}
 
-    @app.post("/model/approve", response_model=DeployResponse, tags=["retraining"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/model/approve",
+        response_model=DeployResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def model_approve():
         """The human approval step. Refused unless every promotion check passes."""
         result = registry.compare()
@@ -431,12 +536,19 @@ def create_app(settings: Settings = None, service: ModelService = None,
         failed = [c["name"] for c in result["checks"] if not c["passed"]]
         if failed:
             raise Conflict("Approval refused, failed checks: " + "; ".join(failed))
-        return deploy(result["challenger_version"],
-                      f"Approved: version {result['challenger_version']} replaces "
-                      f"{result['champion_version']}")
+        return deploy(
+            result["challenger_version"],
+            f"Approved: version {result['challenger_version']} replaces "
+            f"{result['champion_version']}",
+        )
 
-    @app.post("/model/rollback", response_model=DeployResponse, tags=["retraining"],
-              dependencies=protected, responses=ERROR_RESPONSES)
+    @app.post(
+        "/model/rollback",
+        response_model=DeployResponse,
+        tags=["retraining"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def model_rollback(body: RollbackRequest):
         """Emergency switch back to an earlier version (no checks: speed matters here)."""
         current = registry.alias_version("champion")
@@ -444,24 +556,40 @@ def create_app(settings: Settings = None, service: ModelService = None,
             raise Conflict(f"Version {body.version} is already champion.")
         return deploy(body.version, f"Rollback: version {body.version} replaces {current}")
 
-    @app.get("/pipeline/status", response_model=PipelineStatusResponse, tags=["pipeline"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/pipeline/status",
+        response_model=PipelineStatusResponse,
+        tags=["pipeline"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def get_pipeline_status():
         return pipeline_status(settings.project_dir)
 
-    @app.get("/pipeline/runs", response_model=RunsResponse, tags=["pipeline"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/pipeline/runs",
+        response_model=RunsResponse,
+        tags=["pipeline"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def get_pipeline_runs(limit: int = Query(20, ge=1, le=200)):
         try:
             check_mlflow_server(settings.mlflow_tracking_uri)  # fail in seconds if it is down
-            return mlflow_runs(settings.mlflow_tracking_uri, settings.experiment_name,
-                               settings.model_name, limit)
+            return mlflow_runs(
+                settings.mlflow_tracking_uri, settings.experiment_name, settings.model_name, limit
+            )
         except Exception as err:
             logger.error("Could not read MLflow runs: %s", err)  # full detail in the log only
             raise ServiceUnavailable("The MLflow tracking server is not reachable.") from err
 
-    @app.get("/logs/recent", response_model=LogEventsResponse, tags=["pipeline"],
-             dependencies=protected, responses=ERROR_RESPONSES)
+    @app.get(
+        "/logs/recent",
+        response_model=LogEventsResponse,
+        tags=["pipeline"],
+        dependencies=protected,
+        responses=ERROR_RESPONSES,
+    )
     def get_recent_logs(limit: int = Query(50, ge=1, le=500)):
         return {"events": recent_log_events(LOG_DIR, limit)}
 
@@ -475,8 +603,12 @@ def create_app(settings: Settings = None, service: ModelService = None,
         sync_drift_baseline()
         drift.add(readings)
         at_risk = sum(e["at_risk"] for e in result["engines"])
-        logger.info("Predicted %d engine(s), %d at risk (model v%s)",
-                    result["n_engines"], at_risk, result["model_version"])
+        logger.info(
+            "Predicted %d engine(s), %d at risk (model v%s)",
+            result["n_engines"],
+            at_risk,
+            result["model_version"],
+        )
         return result
 
     return app

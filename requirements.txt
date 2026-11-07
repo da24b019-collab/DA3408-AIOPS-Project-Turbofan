@@ -17,3 +17,6 @@ fastapi>=0.110         # backend REST API used by the dashboard
 uvicorn>=0.29          # web server that runs the FastAPI app
 python-multipart>=0.0.9  # lets FastAPI receive uploaded CSV files
 httpx>=0.27            # used by FastAPI's test client in the API tests
+prometheus-client>=0.26  # /metrics in the backend, Pushgateway pushes from the pipeline
+black==26.10.1           # code formatter (settings in pyproject.toml)
+flake8==7.5.0            # code checker (settings in .flake8)

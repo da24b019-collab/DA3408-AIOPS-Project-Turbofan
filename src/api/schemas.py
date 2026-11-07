@@ -41,17 +41,37 @@ class ModelInfoResponse(BaseModel):
     test_metrics: dict
     sensors: list[SensorInfo]
     loaded_at: str
-    drift_baseline: bool = False   # does this model version have a drift baseline?
+    drift_baseline: bool = False  # does this model version have a drift baseline?
     previous_version: Optional[str] = None
 
 
 class PredictRequest(BaseModel):
     readings: list[dict] = Field(
-        ..., description="One object per engine per cycle: unit, cycle and the 14 model sensors.",
-        examples=[[{"unit": 1, "cycle": 1, "s2": 642.1, "s3": 1585.3, "s4": 1398.2,
-                    "s7": 554.1, "s8": 2388.0, "s9": 9050.2, "s11": 47.3, "s12": 521.9,
-                    "s13": 2388.0, "s14": 8133.5, "s15": 8.42, "s17": 392,
-                    "s20": 38.9, "s21": 23.3}]])
+        ...,
+        description="One object per engine per cycle: unit, cycle and the 14 model sensors.",
+        examples=[
+            [
+                {
+                    "unit": 1,
+                    "cycle": 1,
+                    "s2": 642.1,
+                    "s3": 1585.3,
+                    "s4": 1398.2,
+                    "s7": 554.1,
+                    "s8": 2388.0,
+                    "s9": 9050.2,
+                    "s11": 47.3,
+                    "s12": 521.9,
+                    "s13": 2388.0,
+                    "s14": 8133.5,
+                    "s15": 8.42,
+                    "s17": 392,
+                    "s20": 38.9,
+                    "s21": 23.3,
+                }
+            ]
+        ],
+    )
 
 
 class Factor(BaseModel):
@@ -137,23 +157,25 @@ class LogEventsResponse(BaseModel):
 
 class DriftStatusResponse(BaseModel):
     """Data drift of the recent readings vs the model's training data (PSI)."""
+
     state: Literal["no_baseline", "collecting", "ok", "drift"]
-    n_rows: int                  # readings in the window now
-    min_rows: int                # PSI is only judged from this many rows on
-    window_rows: int             # size of the sliding window
+    n_rows: int  # readings in the window now
+    min_rows: int  # PSI is only judged from this many rows on
+    window_rows: int  # size of the sliding window
     threshold: float
     baseline_model_version: Optional[str] = None
     max_psi: Optional[float] = None
     worst_sensor: Optional[str] = None
     drift_detected: bool
-    closest_baseline: Optional[str] = None   # training dataset the data looks most like
-    baselines: list[str] = []                # datasets the served model was trained on
+    closest_baseline: Optional[str] = None  # training dataset the data looks most like
+    baselines: list[str] = []  # datasets the served model was trained on
     sensor_psi: dict[str, float]
 
 
 class Alert(BaseModel):
     """One alert as Alertmanager sends it (only the fields we use)."""
-    status: str                  # "firing" or "resolved"
+
+    status: str  # "firing" or "resolved"
     labels: dict[str, str] = {}
     annotations: dict[str, str] = {}
     startsAt: Optional[str] = None
@@ -162,6 +184,7 @@ class Alert(BaseModel):
 
 class AlertmanagerWebhook(BaseModel):
     """Body of an Alertmanager webhook notification."""
+
     status: str
     alerts: list[Alert]
 
@@ -172,7 +195,7 @@ class ReceivedAlert(BaseModel):
     status: str
     severity: str
     summary: str
-    action: str = ""             # what the backend did about it (e.g. "retrain job 3 queued")
+    action: str = ""  # what the backend did about it (e.g. "retrain job 3 queued")
 
 
 class AlertsResponse(BaseModel):
@@ -182,6 +205,7 @@ class AlertsResponse(BaseModel):
 # ------------------------------------------------------------ retraining (Task 9)
 class Job(BaseModel):
     """A retraining or deploy job (src/api/jobs.py)."""
+
     id: int
     kind: Literal["retrain", "deploy"]
     status: Literal["queued", "running", "succeeded", "failed"]
@@ -199,11 +223,13 @@ class JobsResponse(BaseModel):
 
 
 class ClaimResponse(BaseModel):
-    job: Optional[Job] = None    # null when there is no work
+    job: Optional[Job] = None  # null when there is no work
 
 
 class RetrainRequest(BaseModel):
-    subsets: Optional[list[Literal["FD001", "FD002", "FD003", "FD004"]]] = None  # default: params.yaml
+    subsets: Optional[list[Literal["FD001", "FD002", "FD003", "FD004"]]] = (
+        None  # default: params.yaml
+    )
     reason: str = "Requested from the dashboard"
 
 
@@ -221,9 +247,10 @@ class Check(BaseModel):
 
 class CompareResponse(BaseModel):
     """Champion and challenger scored on the same NASA test sets."""
+
     champion_version: str
     challenger_version: str
-    scores: dict[str, dict[str, dict[str, float]]]   # role -> subset -> metric -> value
+    scores: dict[str, dict[str, dict[str, float]]]  # role -> subset -> metric -> value
     checks: list[Check]
     approvable: bool
 

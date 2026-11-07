@@ -16,11 +16,13 @@ from src.features.feature_logic import compute_features_pandas, feature_names
 
 def make_engine(unit: int, values: list) -> pd.DataFrame:
     """One engine with a single sensor s2 taking the given values."""
-    return pd.DataFrame({
-        "unit": unit,
-        "cycle": range(1, len(values) + 1),
-        "s2": [float(v) for v in values],
-    })
+    return pd.DataFrame(
+        {
+            "unit": unit,
+            "cycle": range(1, len(values) + 1),
+            "s2": [float(v) for v in values],
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +30,13 @@ def make_engine(unit: int, values: list) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 def test_feature_names_order():
     assert feature_names(["s2", "s3"], 5) == [
-        "s2", "s3", "s2_mean5", "s3_mean5", "s2_std5", "s3_std5"]
+        "s2",
+        "s3",
+        "s2_mean5",
+        "s3_mean5",
+        "s2_std5",
+        "s3_std5",
+    ]
 
 
 def test_rolling_mean_by_hand():
@@ -73,10 +81,13 @@ def test_missing_column_raises():
 def spark():
     """Start Spark once for all tests in this file (starting it takes a few seconds)."""
     from pyspark.sql import SparkSession
-    session = (SparkSession.builder.master("local[2]")
-               .appName("test-features")
-               .config("spark.ui.enabled", "false")
-               .getOrCreate())
+
+    session = (
+        SparkSession.builder.master("local[2]")
+        .appName("test-features")
+        .config("spark.ui.enabled", "false")
+        .getOrCreate()
+    )
     session.sparkContext.setLogLevel("ERROR")
     yield session
     session.stop()
@@ -89,21 +100,30 @@ def test_spark_matches_pandas(spark):
     rng = np.random.default_rng(seed=0)
     parts = []
     for unit, n_cycles in [(1, 25), (2, 8), (3, 1)]:
-        parts.append(pd.DataFrame({
-            "subset": "FD001",
-            "unit": unit,
-            "cycle": range(1, n_cycles + 1),
-            "s2": rng.normal(642, 0.5, n_cycles),
-            "s3": rng.normal(1590, 6, n_cycles),
-        }))
+        parts.append(
+            pd.DataFrame(
+                {
+                    "subset": "FD001",
+                    "unit": unit,
+                    "cycle": range(1, n_cycles + 1),
+                    "s2": rng.normal(642, 0.5, n_cycles),
+                    "s3": rng.normal(1590, 6, n_cycles),
+                }
+            )
+        )
     data = pd.concat(parts, ignore_index=True)
     sensors, window = ["s2", "s3"], 10
     cols = feature_names(sensors, window)
 
     expected = compute_features_pandas(data, sensors, window)
-    result = (add_rolling_features(spark.createDataFrame(data), sensors, window)
-              .toPandas().sort_values(["unit", "cycle"]).reset_index(drop=True))
+    result = (
+        add_rolling_features(spark.createDataFrame(data), sensors, window)
+        .toPandas()
+        .sort_values(["unit", "cycle"])
+        .reset_index(drop=True)
+    )
 
     # Allow only floating-point rounding differences
-    np.testing.assert_allclose(result[cols].to_numpy(), expected[cols].to_numpy(),
-                               rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(
+        result[cols].to_numpy(), expected[cols].to_numpy(), rtol=1e-6, atol=1e-6
+    )

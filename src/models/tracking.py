@@ -17,9 +17,9 @@ def git_commit() -> str:
     """Full hash of the current Git commit, or 'unknown' outside a Git repo."""
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True,
-            stderr=subprocess.DEVNULL).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except subprocess.CalledProcessError, FileNotFoundError:
         return "unknown"
 
 
@@ -31,9 +31,12 @@ def git_is_dirty() -> bool:
     try:
         status = subprocess.check_output(
             ["git", "status", "--porcelain", "--untracked-files=no"],
-            cwd=PROJECT_ROOT, text=True, stderr=subprocess.DEVNULL)
+            cwd=PROJECT_ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
         return bool(status.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return True
 
 
@@ -63,4 +66,5 @@ def check_mlflow_server(tracking_uri: str) -> None:
     raise RuntimeError(
         f"MLflow server is not reachable at {tracking_uri}. Start it first with:\n"
         "  mlflow server --backend-store-uri sqlite:///mlflow_data/mlflow.db "
-        "--artifacts-destination mlflow_data/artifacts --host 127.0.0.1 --port 5000")
+        "--artifacts-destination mlflow_data/artifacts --host 127.0.0.1 --port 5000"
+    )

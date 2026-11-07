@@ -26,8 +26,11 @@ def summary_sentence(level: str, factors: list) -> str:
     """One plain-language sentence for the operator."""
     if level == "low":
         return "Low risk: the recent sensor readings look like a healthy engine."
-    opening = ("High risk of failure within 30 cycles." if level == "high"
-               else "Medium risk: keep this engine under watch.")
+    opening = (
+        "High risk of failure within 30 cycles."
+        if level == "high"
+        else "Medium risk: keep this engine under watch."
+    )
     raising = [f["description"] for f in factors if f["effect"] == "raises risk"]
     if not raising:
         return opening
@@ -58,17 +61,23 @@ def predict_engines(readings: pd.DataFrame, service, sensors: list, window: int)
         if cycles_received[unit] < window:
             warnings.append(
                 f"Only {cycles_received[unit]} cycle(s) received; at least {window} give a "
-                "more reliable prediction.")
-        engines.append({
-            "unit": unit,
-            "cycles_received": int(cycles_received[unit]),
-            "last_cycle": int(row["cycle"]),
-            "failure_probability": round(prob, 4),
-            "at_risk": prob >= threshold,
-            "risk_level": level,
-            "explanation": {"summary": summary_sentence(level, factors), "top_factors": factors},
-            "warnings": warnings,
-        })
+                "more reliable prediction."
+            )
+        engines.append(
+            {
+                "unit": unit,
+                "cycles_received": int(cycles_received[unit]),
+                "last_cycle": int(row["cycle"]),
+                "failure_probability": round(prob, 4),
+                "at_risk": prob >= threshold,
+                "risk_level": level,
+                "explanation": {
+                    "summary": summary_sentence(level, factors),
+                    "top_factors": factors,
+                },
+                "warnings": warnings,
+            }
+        )
 
     return {
         "model_version": service.info["version"],

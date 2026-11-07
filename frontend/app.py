@@ -46,13 +46,23 @@ def sidebar_status() -> None:
         st.caption("Status refreshes every 15 seconds.")
 
 
-pages = st.navigation([
-    st.Page(predict.render, title="Engine check", icon=":material/monitor_heart:", default=True),
-    st.Page(pipeline.render, title="Pipeline", icon=":material/account_tree:", url_path="pipeline"),
-    st.Page(monitoring.render, title="Monitoring", icon=":material/monitoring:",
-            url_path="monitoring"),
-    st.Page(model.render, title="Model", icon=":material/model_training:", url_path="model"),
-    st.Page(help_page.render, title="Help", icon=":material/help:", url_path="help"),
-])
+pages = st.navigation(
+    [
+        st.Page(
+            predict.render, title="Engine check", icon=":material/monitor_heart:", default=True
+        ),
+        st.Page(
+            pipeline.render, title="Pipeline", icon=":material/account_tree:", url_path="pipeline"
+        ),
+        st.Page(
+            monitoring.render,
+            title="Monitoring",
+            icon=":material/monitoring:",
+            url_path="monitoring",
+        ),
+        st.Page(model.render, title="Model", icon=":material/model_training:", url_path="model"),
+        st.Page(help_page.render, title="Help", icon=":material/help:", url_path="help"),
+    ]
+)
 sidebar_status()
 pages.run()

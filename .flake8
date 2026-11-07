@@ -1,0 +1,10 @@
+# flake8 settings (flake8 cannot read pyproject.toml, so they live here)
+[flake8]
+max-line-length = 100
+exclude = .git,.venv,.dvc,__pycache__,mlflow_data,tmp,notebooks,data,models
+# E203: black puts a space before ":" in slices (x[a : b]); flake8 would complain about it
+extend-ignore = E203
+per-file-ignores =
+    # matplotlib.use("Agg") must run BEFORE pyplot is imported (no screen on a server),
+    # so some imports in train.py are intentionally not at the top of the file
+    src/models/train.py:E402

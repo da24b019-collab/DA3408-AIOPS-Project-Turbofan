@@ -36,14 +36,20 @@ class ApiClient:
     def _request(self, method: str, path: str, **kwargs):
         url = f"{self.base_url}{path}"
         try:
-            response = requests.request(method, url, headers=self.headers,
-                                        timeout=TIMEOUT_SECONDS, **kwargs)
+            response = requests.request(
+                method, url, headers=self.headers, timeout=TIMEOUT_SECONDS, **kwargs
+            )
         except requests.ConnectionError as err:
-            raise ApiError(f"Cannot reach the prediction service at {self.base_url}. "
-                           "Is the backend running?", code="connection_error") from err
+            raise ApiError(
+                f"Cannot reach the prediction service at {self.base_url}. "
+                "Is the backend running?",
+                code="connection_error",
+            ) from err
         except requests.Timeout as err:
-            raise ApiError("The prediction service took too long to answer. "
-                           "Please try again.", code="timeout") from err
+            raise ApiError(
+                "The prediction service took too long to answer. " "Please try again.",
+                code="timeout",
+            ) from err
 
         try:
             body = response.json()
@@ -52,8 +58,11 @@ class ApiClient:
         if response.ok:
             return body
         # Our backend always answers errors as {"error": ..., "detail": ...}
-        raise ApiError(body.get("detail", f"Unexpected answer (HTTP {response.status_code})."),
-                       code=body.get("error", ""), status=response.status_code)
+        raise ApiError(
+            body.get("detail", f"Unexpected answer (HTTP {response.status_code})."),
+            code=body.get("error", ""),
+            status=response.status_code,
+        )
 
     # ---- status and model ----
     def ready(self) -> dict:
@@ -62,8 +71,9 @@ class ApiClient:
             response = requests.get(f"{self.base_url}/ready", headers=self.headers, timeout=15)
             return response.json()
         except (requests.RequestException, ValueError) as err:
-            raise ApiError(f"Cannot reach the prediction service at {self.base_url}.",
-                           code="connection_error") from err
+            raise ApiError(
+                f"Cannot reach the prediction service at {self.base_url}.", code="connection_error"
+            ) from err
 
     def model_info(self) -> dict:
         return self._request("GET", "/model/info")

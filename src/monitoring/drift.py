@@ -23,9 +23,11 @@ A model trained on SEVERAL datasets (e.g. FD001 and FD002, after a retrain)
 gets one baseline per dataset. New data counts as "known" when it looks like
 AT LEAST ONE of them, so the drift score is the score against the closest
 baseline. (One baseline of all data mixed together would wrongly call pure
-FD001 data "drifted", because FD001 alone fills only some of the mixed bins.) Threshold 1.0, minimum 500 rows and
-a 1,000-row window were chosen from measurements, not from the textbook
-0.25 (see docs/monitoring_findings.md and experiments/drift_threshold_study.py).
+FD001 data "drifted", because FD001 alone fills only some of the mixed bins.)
+
+Threshold 1.0, a minimum of 3,000 rows and a 5,000-row window (params.yaml)
+were chosen from measurements, not from the textbook 0.25
+(see docs/monitoring_findings.md and experiments/drift_threshold_study.py).
 """
 
 import threading
@@ -54,8 +56,10 @@ def build_baseline(train: pd.DataFrame, sensors: list, n_bins: int = 10) -> dict
         quantiles = np.linspace(0, 1, n_bins + 1)[1:-1]
         edges = np.unique(np.quantile(values, quantiles))
         expected = bin_fractions(values, edges)
-        baseline[sensor] = {"edges": edges.round(6).tolist(),
-                            "expected": expected.round(6).tolist()}
+        baseline[sensor] = {
+            "edges": edges.round(6).tolist(),
+            "expected": expected.round(6).tolist(),
+        }
     return baseline
 
 
@@ -81,15 +85,17 @@ def as_named_baselines(saved: dict) -> dict:
     Models trained before Task 9 saved a single {sensor: bins}: wrap it.
     """
     first = next(iter(saved.values()))
-    if "edges" in first:                      # old format: keys are sensors
+    if "edges" in first:  # old format: keys are sensors
         return {"training": saved}
     return saved
 
 
 def psi_per_sensor(baseline: dict, readings: pd.DataFrame) -> dict:
     """PSI of every sensor in the baseline for a batch of readings."""
-    return {sensor: psi(b["expected"], bin_fractions(readings[sensor].to_numpy(float), b["edges"]))
-            for sensor, b in baseline.items()}
+    return {
+        sensor: psi(b["expected"], bin_fractions(readings[sensor].to_numpy(float), b["edges"]))
+        for sensor, b in baseline.items()
+    }
 
 
 # ----------------------------------------------------------------- monitor
@@ -103,13 +109,14 @@ class DriftMonitor:
     requests at the same time.
     """
 
-    def __init__(self, sensors: list, threshold: float = 1.0,
-                 min_rows: int = 500, window_rows: int = 1000):
+    def __init__(
+        self, sensors: list, threshold: float = 1.0, min_rows: int = 500, window_rows: int = 1000
+    ):
         self.sensors = list(sensors)
         self.threshold = threshold
         self.min_rows = min_rows
-        self.baselines = None                   # {name: baseline}, set by set_baseline()
-        self.baseline_version = None            # model version the baseline came from
+        self.baselines = None  # {name: baseline}, set by set_baseline()
+        self.baseline_version = None  # model version the baseline came from
         self._rows = deque(maxlen=window_rows)  # oldest rows fall out automatically
         self._lock = threading.Lock()
 
@@ -124,8 +131,10 @@ class DriftMonitor:
         decide whether the new model sees drift.
         """
         with self._lock:
-            self.baselines = {name: {s: b[s] for s in self.sensors if s in b}
-                              for name, b in as_named_baselines(baseline).items()}
+            self.baselines = {
+                name: {s: b[s] for s in self.sensors if s in b}
+                for name, b in as_named_baselines(baseline).items()
+            }
             self.baseline_version = model_version
             self._rows.clear()
 
@@ -149,13 +158,20 @@ class DriftMonitor:
         with self._lock:
             rows = np.array(self._rows)
         n_rows = len(rows)
-        result = {"state": "no_baseline", "n_rows": n_rows, "min_rows": self.min_rows,
-                  "window_rows": self.window_rows, "threshold": self.threshold,
-                  "baseline_model_version": self.baseline_version,
-                  "max_psi": None, "worst_sensor": None, "drift_detected": False,
-                  "closest_baseline": None,
-                  "baselines": sorted(self.baselines) if self.baselines else [],
-                  "sensor_psi": {}}
+        result = {
+            "state": "no_baseline",
+            "n_rows": n_rows,
+            "min_rows": self.min_rows,
+            "window_rows": self.window_rows,
+            "threshold": self.threshold,
+            "baseline_model_version": self.baseline_version,
+            "max_psi": None,
+            "worst_sensor": None,
+            "drift_detected": False,
+            "closest_baseline": None,
+            "baselines": sorted(self.baselines) if self.baselines else [],
+            "sensor_psi": {},
+        }
         if self.baselines is None:
             return result
         if n_rows < self.min_rows:
@@ -169,8 +185,14 @@ class DriftMonitor:
         scores = all_scores[closest]
         worst = max(scores, key=scores.get)
         drift = scores[worst] > self.threshold
-        result.update({"state": "drift" if drift else "ok",
-                       "max_psi": round(scores[worst], 4), "worst_sensor": worst,
-                       "drift_detected": drift, "closest_baseline": closest,
-                       "sensor_psi": {s: round(v, 4) for s, v in scores.items()}})
+        result.update(
+            {
+                "state": "drift" if drift else "ok",
+                "max_psi": round(scores[worst], 4),
+                "worst_sensor": worst,
+                "drift_detected": drift,
+                "closest_baseline": closest,
+                "sensor_psi": {s: round(v, 4) for s, v in scores.items()},
+            }
+        )
         return result

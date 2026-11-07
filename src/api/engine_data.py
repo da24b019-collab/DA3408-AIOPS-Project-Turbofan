@@ -63,7 +63,8 @@ def validate_readings(df: pd.DataFrame, sensors: list, max_rows: int) -> pd.Data
     bad_columns = [c for c in required if numeric[c].isna().any()]
     if bad_columns:
         raise InputValidationError(
-            f"Missing or non-numeric values in column(s): {', '.join(bad_columns)}.")
+            f"Missing or non-numeric values in column(s): {', '.join(bad_columns)}."
+        )
 
     # unit and cycle must be positive whole numbers
     for col in ID_COLUMNS:
@@ -77,7 +78,8 @@ def validate_readings(df: pd.DataFrame, sensors: list, max_rows: int) -> pd.Data
     if duplicated.any():
         first = numeric[duplicated].iloc[0]
         raise InputValidationError(
-            f"Engine {int(first['unit'])} has cycle {int(first['cycle'])} more than once.")
+            f"Engine {int(first['unit'])} has cycle {int(first['cycle'])} more than once."
+        )
 
     numeric[sensors] = numeric[sensors].astype("float64")
     return numeric.sort_values(ID_COLUMNS).reset_index(drop=True)

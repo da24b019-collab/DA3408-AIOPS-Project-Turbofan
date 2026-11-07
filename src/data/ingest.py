@@ -104,7 +104,9 @@ def validate_frame(df: pd.DataFrame, name: str) -> None:
 
     logger.info(
         "%s passed validation: %d rows, %d engines",
-        name, len(df), df["unit"].nunique(),
+        name,
+        len(df),
+        df["unit"].nunique(),
     )
 
 

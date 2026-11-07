@@ -61,8 +61,13 @@ def plot_pr_curve(y_true, prob, threshold: float, path, title: str) -> None:
     idx = int(np.argmin(np.abs(thresholds - threshold)))
     fig, ax = plt.subplots(figsize=(6, 5))
     ax.plot(recall, precision, color="steelblue")
-    ax.scatter([recall[idx]], [precision[idx]], color="red", zorder=3,
-               label=f"chosen threshold = {threshold:.3f}")
+    ax.scatter(
+        [recall[idx]],
+        [precision[idx]],
+        color="red",
+        zorder=3,
+        label=f"chosen threshold = {threshold:.3f}",
+    )
     ax.set_xlabel("Recall (share of real failures caught)")
     ax.set_ylabel("Precision (share of alarms that were real)")
     ax.set_title(title)
@@ -77,7 +82,8 @@ def plot_confusion_matrix(y_true, prob, threshold: float, path, title: str) -> N
     pred = (np.asarray(prob) >= threshold).astype(int)
     fig, ax = plt.subplots(figsize=(5, 4.5))
     ConfusionMatrixDisplay.from_predictions(
-        y_true, pred, display_labels=["safe", "at risk"], cmap="Blues", ax=ax, colorbar=False)
+        y_true, pred, display_labels=["safe", "at risk"], cmap="Blues", ax=ax, colorbar=False
+    )
     ax.set_title(title)
     fig.tight_layout()
     fig.savefig(path, dpi=120)

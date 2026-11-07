@@ -20,17 +20,38 @@ from src.api.model_service import ModelUnavailableError
 from src.api.prediction import risk_level
 from src.api.settings import Settings
 
-SENSORS = ["s2", "s3", "s4", "s7", "s8", "s9", "s11", "s12",
-           "s13", "s14", "s15", "s17", "s20", "s21"]
+SENSORS = [
+    "s2",
+    "s3",
+    "s4",
+    "s7",
+    "s8",
+    "s9",
+    "s11",
+    "s12",
+    "s13",
+    "s14",
+    "s15",
+    "s17",
+    "s20",
+    "s21",
+]
 
 
 def make_settings(api_key: str = "") -> Settings:
     # project_dir is a fresh temporary folder: the jobs file the API writes
     # (retraining/jobs.json) must never land in the real project.
-    return Settings(mlflow_tracking_uri="http://unused", model_name="test-model",
-                    model_alias="champion", model_server_url="", api_key=api_key,
-                    cors_origins=[], sensors=SENSORS, window=10,
-                    project_dir=Path(tempfile.mkdtemp(prefix="turbofan-test-project-")))
+    return Settings(
+        mlflow_tracking_uri="http://unused",
+        model_name="test-model",
+        model_alias="champion",
+        model_server_url="",
+        api_key=api_key,
+        cors_origins=[],
+        sensors=SENSORS,
+        window=10,
+        project_dir=Path(tempfile.mkdtemp(prefix="turbofan-test-project-")),
+    )
 
 
 class FakeModelService:
@@ -59,8 +80,14 @@ class FakeModelService:
         return ((X["s11_mean10"] - 47.0).clip(0, 1)).to_numpy()
 
     def explain(self, row):
-        return [{"sensor": "s11", "description": "HPC outlet static pressure (Ps30)",
-                 "effect": "raises risk", "contribution": 1.0}]
+        return [
+            {
+                "sensor": "s11",
+                "description": "HPC outlet static pressure (Ps30)",
+                "effect": "raises risk",
+                "contribution": 1.0,
+            }
+        ]
 
     def model_server_status(self):
         return self._server_status
@@ -142,8 +169,10 @@ def test_missing_column_is_422(client):
         del row["s11"]
     response = client.post("/predict", json={"readings": rows})
     assert response.status_code == 422
-    assert response.json() == {"error": "invalid_input",
-                               "detail": "Missing required column(s): s11."}
+    assert response.json() == {
+        "error": "invalid_input",
+        "detail": "Missing required column(s): s11.",
+    }
 
 
 def test_wrong_json_shape_uses_same_error_format(client):
@@ -178,8 +207,8 @@ def test_api_key_required_when_set():
 
 # ------------------------------------------------------------ pure functions
 def test_risk_level_boundaries():
-    assert risk_level(0.50, threshold=0.5) == "high"     # equal to threshold counts as at risk
-    assert risk_level(0.25, threshold=0.5) == "medium"   # half the threshold
+    assert risk_level(0.50, threshold=0.5) == "high"  # equal to threshold counts as at risk
+    assert risk_level(0.25, threshold=0.5) == "medium"  # half the threshold
     assert risk_level(0.24, threshold=0.5) == "low"
 
 
@@ -197,8 +226,11 @@ def test_too_many_rows():
 
 def test_summary_lists_reasons_naturally():
     from src.api.prediction import summary_sentence
+
     factors = [{"description": d, "effect": "raises risk"} for d in ("A", "B", "C")]
-    assert summary_sentence("high", factors).endswith("Main reasons: A, B and C are raising the risk.")
+    assert summary_sentence("high", factors).endswith(
+        "Main reasons: A, B and C are raising the risk."
+    )
     assert summary_sentence("high", factors[:1]).endswith("Main reasons: A is raising the risk.")
 
 
@@ -221,8 +253,9 @@ def noisy_engine(unit: int, n_cycles: int, centre: float) -> list:
     rng = __import__("numpy").random.default_rng(unit)
     rows = []
     for cycle in range(1, n_cycles + 1):
-        rows.append({"unit": unit, "cycle": cycle,
-                     **{s: float(rng.normal(centre, 1)) for s in SENSORS}})
+        rows.append(
+            {"unit": unit, "cycle": cycle, **{s: float(rng.normal(centre, 1)) for s in SENSORS}}
+        )
     return rows
 
 
@@ -255,7 +288,7 @@ def test_drift_without_baseline(client):
 def test_drift_collecting_then_ok_then_drift():
     with drift_client() as c:
         c.post("/predict", json={"readings": noisy_engine(1, 100, 100)})
-        assert c.get("/drift/status").json()["state"] == "collecting"   # 100 < 300 rows
+        assert c.get("/drift/status").json()["state"] == "collecting"  # 100 < 300 rows
 
         # Same distribution as training. (With only ~40 rows this would wrongly
         # show "drift": small samples inflate PSI, the reason for min_rows.)
@@ -271,9 +304,16 @@ def test_drift_collecting_then_ok_then_drift():
 
 
 def test_alert_webhook_accepts_bearer_token_and_stores_alert():
-    alert = {"status": "firing", "alerts": [{
-        "status": "firing", "labels": {"alertname": "DataDrift", "severity": "warning"},
-        "annotations": {"summary": "Sensor data has drifted"}}]}
+    alert = {
+        "status": "firing",
+        "alerts": [
+            {
+                "status": "firing",
+                "labels": {"alertname": "DataDrift", "severity": "warning"},
+                "annotations": {"summary": "Sensor data has drifted"},
+            }
+        ],
+    }
     with drift_client(api_key="secret") as c:
         assert c.post("/alerts/webhook", json=alert).status_code == 401
         ok = c.post("/alerts/webhook", json=alert, headers={"Authorization": "Bearer secret"})

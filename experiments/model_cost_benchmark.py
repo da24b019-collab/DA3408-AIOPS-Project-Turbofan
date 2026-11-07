@@ -43,7 +43,7 @@ def main():
     X, y = train[features].astype("float64"), train["label"]
     test = pd.read_parquet(data_dir / "test_FD001.parquet")
     one_engine = test[test["unit"] == 1][features].astype("float64")  # one operator upload
-    last_cycle = one_engine.tail(1)                                 # the row we explain
+    last_cycle = one_engine.tail(1)  # the row we explain
     pos_weight = (y == 0).sum() / (y == 1).sum()
 
     results = []
@@ -60,12 +60,18 @@ def main():
             explainer = shap.TreeExplainer(model)
             explain_input = last_cycle
 
-        results.append({
-            "model": model_type,
-            "size_kb": round(len(pickle.dumps(model)) / 1024),
-            "predict_one_engine_ms": round(average_ms(lambda: model.predict_proba(one_engine), 20), 1),
-            "shap_one_row_ms": round(average_ms(lambda: explainer.shap_values(explain_input), 10), 1),
-        })
+        results.append(
+            {
+                "model": model_type,
+                "size_kb": round(len(pickle.dumps(model)) / 1024),
+                "predict_one_engine_ms": round(
+                    average_ms(lambda: model.predict_proba(one_engine), 20), 1
+                ),
+                "shap_one_row_ms": round(
+                    average_ms(lambda: explainer.shap_values(explain_input), 10), 1
+                ),
+            }
+        )
         print(results[-1])
 
     REPORT_PATH.write_text(json.dumps(results, indent=2))

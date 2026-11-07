@@ -65,9 +65,18 @@ class JobStore:
         assert kind in JOB_KINDS
         with self._lock:
             jobs = self._read()
-            job = {"id": len(jobs) + 1, "kind": kind, "status": "queued", "reason": reason,
-                   "params": params, "created_at": now(), "started_at": None,
-                   "finished_at": None, "detail": "", "result": {}}
+            job = {
+                "id": len(jobs) + 1,
+                "kind": kind,
+                "status": "queued",
+                "reason": reason,
+                "params": params,
+                "created_at": now(),
+                "started_at": None,
+                "finished_at": None,
+                "detail": "",
+                "result": {},
+            }
             jobs.append(job)
             self._write(jobs)
             return job
@@ -75,15 +84,18 @@ class JobStore:
     def open_job(self, kind: str):
         """A job of this kind that is still queued or running, if any."""
         with self._lock:
-            return next((j for j in self._read()
-                         if j["kind"] == kind and j["status"] in OPEN_STATES), None)
+            return next(
+                (j for j in self._read() if j["kind"] == kind and j["status"] in OPEN_STATES), None
+            )
 
     def created_within(self, kind: str, minutes: float) -> bool:
         """Was a job of this kind created in the last `minutes`? (cooldown)"""
         limit = datetime.now().astimezone() - timedelta(minutes=minutes)
         with self._lock:
-            return any(j["kind"] == kind and datetime.fromisoformat(j["created_at"]) > limit
-                       for j in self._read())
+            return any(
+                j["kind"] == kind and datetime.fromisoformat(j["created_at"]) > limit
+                for j in self._read()
+            )
 
     def claim_next(self):
         """Oldest queued job becomes "running" and is returned (None if no work)."""
@@ -104,7 +116,13 @@ class JobStore:
                 return None
             if job["status"] != "running":
                 raise ValueError(f"Job {job_id} is {job['status']}, not running")
-            job.update({"status": "succeeded" if succeeded else "failed",
-                        "finished_at": now(), "detail": detail, "result": result})
+            job.update(
+                {
+                    "status": "succeeded" if succeeded else "failed",
+                    "finished_at": now(),
+                    "detail": detail,
+                    "result": result,
+                }
+            )
             self._write(jobs)
             return job

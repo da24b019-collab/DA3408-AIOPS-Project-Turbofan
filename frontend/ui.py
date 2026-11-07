@@ -42,8 +42,10 @@ def apply_style() -> None:
 def risk_badge(level: str) -> str:
     """HTML for a coloured pill such as [ High ]."""
     c = RISK_COLOURS[level]
-    return (f'<span class="risk-badge" style="color:{c["text"]};'
-            f'background:{c["background"]}">{c["label"]}</span>')
+    return (
+        f'<span class="risk-badge" style="color:{c["text"]};'
+        f'background:{c["background"]}">{c["label"]}</span>'
+    )
 
 
 def risk_label(level: str) -> str:
@@ -58,7 +60,7 @@ def show_api_error(err) -> None:
         "invalid_input": "Check that the file has the columns listed on the Help page.",
         "bad_file": "Upload a .csv file (comma-separated values) smaller than 5 MB.",
         "model_unavailable": "The model is not available right now. Try again in a minute, "
-                             "or ask the system administrator.",
+        "or ask the system administrator.",
         "service_unavailable": "A supporting service is down. Try again in a minute.",
         "connection_error": "The prediction service is not running or not reachable.",
         "unauthorized": "The dashboard's API key does not match the backend's.",

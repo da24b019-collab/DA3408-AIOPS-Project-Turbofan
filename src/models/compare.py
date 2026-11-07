@@ -33,16 +33,19 @@ def load_test_engines(features_dir, subset: str, features: list) -> pd.DataFrame
     return test.groupby("unit").tail(1)
 
 
-def evaluate_on_test_sets(model, threshold: float, features: list,
-                          features_dir=None, subsets=ALL_SUBSETS) -> dict:
+def evaluate_on_test_sets(
+    model, threshold: float, features: list, features_dir=None, subsets=ALL_SUBSETS
+) -> dict:
     """{subset: {"recall": .., "precision": .., "pr_auc": .., ...}} for one model."""
     features_dir = features_dir or PROJECT_ROOT / "data" / "features"
     scores = {}
     for subset in subsets:
         test = load_test_engines(features_dir, subset, features)
         prob = model.predict_proba(test[features])[:, 1]
-        scores[subset] = {k: round(float(v), 4)
-                          for k, v in classification_metrics(test["label"], prob, threshold).items()}
+        scores[subset] = {
+            k: round(float(v), 4)
+            for k, v in classification_metrics(test["label"], prob, threshold).items()
+        }
     return scores
 
 
@@ -64,21 +67,26 @@ def promotion_checks(champion_scores: dict, challenger_scores: dict, max_drop: f
     checks = []
     for metric in ["recall", "pr_auc"]:
         old, new = champion_scores["FD001"][metric], challenger_scores["FD001"][metric]
-        checks.append({
-            "name": f"FD001 {metric} not worse by more than {max_drop:.2f}",
-            "passed": new >= old - max_drop,
-            "detail": f"champion {old:.3f}, challenger {new:.3f}"})
+        checks.append(
+            {
+                "name": f"FD001 {metric} not worse by more than {max_drop:.2f}",
+                "passed": new >= old - max_drop,
+                "detail": f"champion {old:.3f}, challenger {new:.3f}",
+            }
+        )
     return checks
 
 
-def compare_versions(model_name: str, champion: str, challenger: str,
-                     max_drop: float, features_dir=None) -> dict:
+def compare_versions(
+    model_name: str, champion: str, challenger: str, max_drop: float, features_dir=None
+) -> dict:
     """Score both versions on all test sets and run the approval checks."""
     result = {"champion_version": champion, "challenger_version": challenger, "scores": {}}
     for role, version in [("champion", champion), ("challenger", challenger)]:
         model, threshold, features = load_version(model_name, version)
         result["scores"][role] = evaluate_on_test_sets(model, threshold, features, features_dir)
-    result["checks"] = promotion_checks(result["scores"]["champion"],
-                                        result["scores"]["challenger"], max_drop)
+    result["checks"] = promotion_checks(
+        result["scores"]["champion"], result["scores"]["challenger"], max_drop
+    )
     result["approvable"] = (champion != challenger) and all(c["passed"] for c in result["checks"])
     return result
