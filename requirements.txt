@@ -10,3 +10,4 @@ jupyter>=1.0         # notebooks for exploratory data analysis
 matplotlib>=3.7      # plots during EDA
 scikit-learn>=1.4       # baseline models and evaluation metrics
 xgboost>=2.0            # main model
+pyspark>=4.2,<4.3      # Spark: feature engineering stage (4.2.x supports Java 17 and Python 3.14)

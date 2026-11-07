@@ -1,0 +1,43 @@
+{
+  "spark_version": "4.2.1",
+  "sensors": 14,
+  "window": 10,
+  "tables": {
+    "train_FD001": {
+      "rows": 20631,
+      "seconds": 5.85
+    },
+    "test_FD001": {
+      "rows": 13096,
+      "seconds": 1.65
+    },
+    "train_FD002": {
+      "rows": 53759,
+      "seconds": 1.96
+    },
+    "test_FD002": {
+      "rows": 33991,
+      "seconds": 1.75
+    },
+    "train_FD003": {
+      "rows": 24720,
+      "seconds": 1.63
+    },
+    "test_FD003": {
+      "rows": 16596,
+      "seconds": 1.29
+    },
+    "train_FD004": {
+      "rows": 61249,
+      "seconds": 1.79
+    },
+    "test_FD004": {
+      "rows": 41214,
+      "seconds": 1.48
+    }
+  },
+  "total_rows": 265256,
+  "spark_startup_seconds": 3.71,
+  "processing_seconds": 17.6,
+  "rows_per_second": 15075
+}

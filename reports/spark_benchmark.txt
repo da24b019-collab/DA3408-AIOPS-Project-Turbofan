@@ -1,0 +1,8 @@
+Base fleet: 709 engines, 160359 rows
+x1      160,359 rows | pandas   0.51 s | spark   1.50 s
+x5      801,795 rows | pandas   2.64 s | spark   3.03 s
+x20   3,207,180 rows | pandas  19.19 s | spark  10.75 s
+ scale    rows  pandas_seconds  spark_seconds  pandas_rows_per_s  spark_rows_per_s
+     1  160359            0.51           1.50             316445            106778
+     5  801795            2.64           3.03             303531            264646
+    20 3207180           19.19          10.75             167135            298475

@@ -38,3 +38,54 @@ stages:
       hash: md5
       md5: 07cdb5f62eca999a7f46a04f44f7be23
       size: 955
+  features:
+    cmd: python -m src.features.build_features
+    deps:
+    - path: data/interim
+      hash: md5
+      md5: a6ccdfacdb9d3d260ee26129059365ba.dir
+      size: 8986057
+      nfiles: 8
+    - path: src/config.py
+      hash: md5
+      md5: 6edb2cdcf7e97dc75524cfba8cf4383f
+      size: 2249
+    - path: src/features/build_features.py
+      hash: md5
+      md5: 9a97c275a5c64833f1cc1fd4488b383a
+      size: 6216
+    - path: src/features/feature_logic.py
+      hash: md5
+      md5: 28b4d67851a09ee7eb1ead64045fff6d
+      size: 2516
+    params:
+      params.yaml:
+        features:
+          input_dir: data/interim
+          output_dir: data/features
+          sensors:
+          - s2
+          - s3
+          - s4
+          - s7
+          - s8
+          - s9
+          - s11
+          - s12
+          - s13
+          - s14
+          - s15
+          - s17
+          - s20
+          - s21
+          window: 10
+    outs:
+    - path: data/features
+      hash: md5
+      md5: 8477e83ff8ef12187253eca46c0f2562.dir
+      size: 55354432
+      nfiles: 32
+    - path: reports/features_report.json
+      hash: md5
+      md5: 9b8bf1b652f2b62c5896e56ee7521d8a
+      size: 760

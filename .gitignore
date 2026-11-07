@@ -18,3 +18,6 @@ Thumbs.db
 # Note: data folders are NOT listed here by hand.
 # DVC writes its own .gitignore entries for data/raw and data/interim,
 # so Git stores only the small .dvc pointer files, not the data itself.
+
+# Scratch space (Spark temporary files)
+tmp/

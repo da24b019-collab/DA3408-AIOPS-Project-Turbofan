@@ -22,3 +22,18 @@ stages:
     metrics:
       - reports/ingest_report.json:
           cache: false   # small file, keep it in Git so changes show up in diffs
+
+  features:
+    cmd: python -m src.features.build_features
+    deps:
+      - src/features/build_features.py
+      - src/features/feature_logic.py
+      - src/config.py
+      - data/interim
+    params:
+      - features   # sensors and window: changing them changes the output
+    outs:
+      - data/features
+    metrics:
+      - reports/features_report.json:
+          cache: false

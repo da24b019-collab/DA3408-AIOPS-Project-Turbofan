@@ -13,3 +13,20 @@ data:
 label:
   # An engine is labelled "at risk" (1) if it has this many cycles or fewer left.
   horizon: 30
+
+features:
+  input_dir: data/interim    # output of the ingest stage
+  output_dir: data/features  # rolling-window features written by Spark
+  # Chosen during EDA (see docs/eda_findings.md):
+  # 6 flat sensors and the noisy s6 are dropped, leaving these 14.
+  sensors: [s2, s3, s4, s7, s8, s9, s11, s12, s13, s14, s15, s17, s20, s21]
+  # Rolling window in cycles. 5 was too noisy, 20 lagged behind (EDA Cell 6).
+  window: 10
+
+spark:
+  # These control HOW Spark runs, not WHAT it computes, so the features
+  # stage does not list them as params: changing them will not re-run it.
+  master: "local[*]"       # run on this machine, using every CPU core
+  driver_memory: 4g        # memory for Spark (laptop has 14 GB in total)
+  shuffle_partitions: 12   # how many pieces to split work into (= CPU cores)
+  local_dir: tmp/spark     # Spark scratch space, kept on the project drive

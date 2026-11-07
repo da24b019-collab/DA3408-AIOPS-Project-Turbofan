@@ -1,0 +1,26 @@
+[
+  {
+    "scale": 1,
+    "rows": 160359,
+    "pandas_seconds": 0.51,
+    "spark_seconds": 1.5,
+    "pandas_rows_per_s": 316445,
+    "spark_rows_per_s": 106778
+  },
+  {
+    "scale": 5,
+    "rows": 801795,
+    "pandas_seconds": 2.64,
+    "spark_seconds": 3.03,
+    "pandas_rows_per_s": 303531,
+    "spark_rows_per_s": 264646
+  },
+  {
+    "scale": 20,
+    "rows": 3207180,
+    "pandas_seconds": 19.19,
+    "spark_seconds": 10.75,
+    "pandas_rows_per_s": 167135,
+    "spark_rows_per_s": 298475
+  }
+]
