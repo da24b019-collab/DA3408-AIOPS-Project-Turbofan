@@ -1,0 +1,30 @@
+// The ML lifecycle: from raw data to a served model, and back again when data drifts.
+// Render:  dot -Tpng ml_lifecycle.dot -o ml_lifecycle.png
+digraph lifecycle {
+  graph [rankdir=TB, fontname="Helvetica", fontsize=16, nodesep=0.4, ranksep=0.45, pad=0.3,
+         label="ML lifecycle with the retraining loop (human approval before any model is served)", labelloc=t];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, fillcolor="#FFFFFF", color="#555555", width=3.2];
+  edge  [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  raw      [label="1. Raw NASA C-MAPSS files\nversioned with DVC", fillcolor="#F3F3F3"];
+  ingest   [label="2. ingest: validate, RUL, label\n(fails within 30 cycles = 1)"];
+  features [label="3. features (Spark): 14 sensors x\n{value, 10-cycle mean, 10-cycle std} = 42"];
+  train    [label="4. train: XGBoost, GroupKFold by engine,\nthreshold for recall >= 0.90,\nPSI baseline per dataset"];
+  registry [label="5. MLflow registry:\nnew version = challenger", fillcolor="#E8F1FB"];
+  gate     [label="6. Approval gate: same test engines,\nFD001 must not drop > 0.05", shape=diamond, width=3.6, fillcolor="#FFF2CC"];
+  human    [label="7. Human approves on the Model page\n(champion alias moves)", fillcolor="#FFF2CC"];
+  deploy   [label="8. Deploy job: restart model server,\nreload backend, check in sync"];
+  serve    [label="9. Serve: dashboard -> backend -> model server\n(features computed with the same code)", fillcolor="#E8F1FB"];
+  monitor  [label="10. Monitor: PSI of the last 5,000 readings\nvs the champion's training data", fillcolor="#EAF6EA"];
+  alert    [label="11. DataDrift alert\n(max PSI > 1.0 for 1 minute)", fillcolor="#F8E0DF"];
+  job      [label="12. Retrain job queued (one at a time,\n30-min cooldown); worker sets\ntrain.subsets, commits, dvc repro", fillcolor="#F8E0DF"];
+
+  raw -> ingest -> features -> train -> registry -> gate;
+  gate -> human  [label="all checks pass"];
+  gate -> registry [label="refused (409):\nchampion stays", style=dashed];
+  human -> deploy -> serve -> monitor;
+  monitor -> alert [label="drift"];
+  alert -> job [label="Alertmanager webhook"];
+  job -> train [label="retrain", color="#C0504D", fontcolor="#C0504D"];
+  serve -> deploy [label="rollback: any earlier\nversion, no gate", style=dashed, constraint=false];
+}

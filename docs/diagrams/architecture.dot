@@ -1,0 +1,70 @@
+// System architecture of the Turbofan Predictive Maintenance platform.
+// Render:  dot -Tpng architecture.dot -o architecture.png
+digraph architecture {
+  graph [rankdir=LR, fontname="Helvetica", fontsize=12, nodesep=0.35, ranksep=0.7,
+         label="Turbofan Predictive Maintenance: system architecture (all on one laptop, no cloud)",
+         labelloc=t, fontsize=16, pad=0.3, newrank=true];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, fillcolor="#FFFFFF", color="#555555"];
+  edge  [fontname="Helvetica", fontsize=9, color="#555555"];
+
+  operator [label="Maintenance operator\n(browser)", shape=ellipse, fillcolor="#FFF2CC"];
+  engineer [label="ML engineer\n(browser + terminal)", shape=ellipse, fillcolor="#FFF2CC"];
+
+  subgraph cluster_app {
+    label="Application containers (docker compose)"; style="rounded,filled"; fillcolor="#E8F1FB"; color="#6C9BD2";
+    frontend    [label="frontend\nStreamlit dashboard\n127.0.0.1:8501"];
+    backend     [label="backend\nFastAPI REST API\n127.0.0.1:8000\nvalidation, features, SHAP,\ndrift (PSI), metrics, job queue"];
+    modelserver [label="model-server\nmlflow models serve\n127.0.0.1:5001\nchampion model"];
+    mlflow      [label="mlflow\ntracking + model registry\n127.0.0.1:5000\naliases: champion / challenger"];
+  }
+
+  subgraph cluster_mon {
+    label="Monitoring containers"; style="rounded,filled"; fillcolor="#EAF6EA"; color="#6DB36D";
+    prometheus   [label="prometheus\n127.0.0.1:9090\nscrapes every 15 s,\n11 alert rules"];
+    alertmanager [label="alertmanager\n127.0.0.1:9093"];
+    grafana      [label="grafana\n127.0.0.1:3000\ndashboard from files"];
+    pushgateway  [label="pushgateway\n127.0.0.1:9091"];
+    blackbox     [label="blackbox-exporter\nuptime probes"];
+    nodeexp      [label="node-exporter\nlaptop CPU, RAM, disk"];
+    cadvisor     [label="cadvisor\ncontainer CPU, RAM"];
+  }
+
+  subgraph cluster_host {
+    label="Laptop (host)"; style="rounded,filled"; fillcolor="#F6EEF9"; color="#A77BC0";
+    pipeline [label="DVC pipeline\ningest -> features (Spark)\n-> train (XGBoost)"];
+    worker   [label="retraining worker\nsrc/retraining/worker.py"];
+    git      [label="Git repository\n(code, params, dvc.lock;\nbinaries via Git LFS)", shape=cylinder, fillcolor="#F3F3F3"];
+    dvcstore [label="DVC remote\n/aiops-storage/dvc-storage\n(data + model versions)", shape=cylinder, fillcolor="#F3F3F3"];
+  }
+
+  // users
+  operator -> frontend [label="upload CSV,\nread risk"];
+  engineer -> frontend [label="approve,\nroll back"];
+  engineer -> grafana  [label="watch"];
+
+  // application
+  frontend -> backend      [label="REST + API key"];
+  backend  -> modelserver  [label="/invocations\n(probabilities)"];
+  backend  -> mlflow       [label="champion info,\nbaseline, aliases"];
+  modelserver -> mlflow    [label="loads @champion\nat start", style=dashed];
+
+  // pipeline and loop
+  pipeline -> mlflow      [label="runs, metrics,\nnew version (challenger)"];
+  pipeline -> dvcstore    [label="dvc push", style=dashed];
+  pipeline -> pushgateway [label="stage metrics"];
+  worker   -> backend     [label="claim / finish jobs"];
+  worker   -> pipeline    [label="dvc repro\n(retrain job)"];
+  worker   -> modelserver [label="docker compose restart\n(deploy job)", style=dashed];
+  worker   -> git         [label="commit params,\ndvc.lock"];
+
+  // monitoring
+  prometheus -> backend     [label="scrape /metrics", style=dotted];
+  prometheus -> mlflow      [label="scrape /metrics", style=dotted];
+  prometheus -> pushgateway [style=dotted];
+  prometheus -> blackbox    [style=dotted];
+  prometheus -> nodeexp     [style=dotted];
+  prometheus -> cadvisor    [style=dotted];
+  prometheus -> alertmanager [label="firing alerts"];
+  alertmanager -> backend   [label="webhook (Bearer key)\nDataDrift -> retrain job", color="#C0504D", fontcolor="#C0504D"];
+  grafana -> prometheus     [label="PromQL"];
+}
