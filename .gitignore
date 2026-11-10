@@ -30,3 +30,7 @@ mlflow_data/
 
 # Retraining job queue written by the backend (Task 9)
 /retraining/
+
+# Test coverage data (Task 10)
+.coverage
+htmlcov/

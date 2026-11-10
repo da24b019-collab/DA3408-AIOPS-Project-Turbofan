@@ -23,3 +23,4 @@ flake8==7.5.0            # code checker (settings in .flake8)
 # The dashboard's libraries (streamlit, requests, altair): the tests also check
 # the dashboard's helper functions, so the development environment needs them.
 -r frontend/requirements.txt
+pytest-cov==7.1.0        # test coverage report (Task 10)

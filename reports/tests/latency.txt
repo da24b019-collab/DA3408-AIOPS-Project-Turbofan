@@ -1,0 +1,6 @@
+Engine rows: single request 31, batch 1433 (10 engines)
+
+TC-P01 one engine (JSON)           n=100  median    35.7 ms  p95    49.0 ms  max  1482.3 ms  target p95 < 200 ms -> PASS
+TC-P02 10 engines (CSV upload)     n= 20  median    75.0 ms  p95    96.3 ms  max    99.2 ms  target p95 < 500 ms -> PASS
+
+All performance criteria met.
