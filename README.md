@@ -1,4 +1,4 @@
-# Turbofan Predictive Maintenance (DA5402 MLOps project)
+# Turbofan Predictive Maintenance (DA3408 MLOps project)
 
 Predicts whether an aircraft engine will **fail within the next 30 operating cycles**, from
 its recent sensor readings (NASA C-MAPSS data), and runs that model on a complete MLOps
