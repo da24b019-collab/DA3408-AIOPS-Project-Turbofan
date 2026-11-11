@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Course | DA5402 (MLOps / AIOps) |
+| Course | DA3408 (MLOps / AIOps) |
 | Related | Architecture diagrams: `docs/diagrams/`; low-level design: `docs/lld.md` and `docs/lld_api.md`; tests: `docs/test_plan.md` |
 
 ## 1. Problem and goal

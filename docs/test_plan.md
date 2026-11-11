@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Project | Predictive maintenance MLOps platform on NASA C-MAPSS (DA5402) |
+| Project | Predictive maintenance MLOps platform on NASA C-MAPSS (DA3408) |
 | Document | Test plan (what is tested, how, and when it counts as passed) |
 | Related | `docs/test_cases.md` (the cases), `docs/test_report.md` (the results) |
 

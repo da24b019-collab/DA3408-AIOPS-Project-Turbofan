@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Project | Turbofan Predictive Maintenance Platform (DA5402) |
+| Project | Turbofan Predictive Maintenance Platform (DA3408) |
 | Test period | 2026-11-07 to 2026-11-10 |
 | Environment | Laptop, Ubuntu 26.04.1 LTS, 12 cores, 14 GiB RAM; Python 3.14.4; Docker 29.9.3, Compose v5.7.0 |
 | Software under test | Commit after "requirements: include the dashboard's libraries" (8db0248) plus Task 10 files; images `turbofan-backend:1.2`, `turbofan-frontend:1.2`; champion model version 8 |

@@ -42,7 +42,7 @@ Docker with Compose v2, Git with Git LFS, and access to the DVC remote folder
 
 ```bash
 # 1. Code (Git LFS brings the figures and PDFs)
-git clone <repository-url> turbofan-pdm && cd turbofan-pdm
+git clone https://github.com/da24b019-collab/DA3408-AIOPS-Project-Turbofan.git turbofan-pdm && cd turbofan-pdm
 git lfs pull
 
 # 2. Python environment
