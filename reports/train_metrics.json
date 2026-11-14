@@ -1,9 +1,9 @@
 {
-  "run_id": "b6b9e53ebca44ed48dac23ad3ff40414",
+  "run_id": "856e5882099f44408ef325e9e6d81cb8",
   "model_type": "xgboost",
-  "model_version": "8",
+  "model_version": "9",
   "threshold": 0.6829,
-  "train_seconds": 71.91,
+  "train_seconds": 11.12,
   "cv_pr_auc_fold_std": 0.003,
   "test_always_safe_accuracy": 0.7604,
   "cv_precision": 0.7905,
