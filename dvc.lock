@@ -169,10 +169,10 @@ stages:
     outs:
     - path: models/latest
       hash: md5
-      md5: 88b3a8c5727f2a9c094a3c3c1a867bff.dir
+      md5: 889ecde5ef22974ed10007649b58ee2e.dir
       size: 508815
       nfiles: 5
     - path: reports/train_metrics.json
       hash: md5
-      md5: 5aa35890f892d1778b253c4559275024
-      size: 952
+      md5: a94e7e6347c1f70133291936ee5793f7
+      size: 953
