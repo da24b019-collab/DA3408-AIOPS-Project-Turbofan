@@ -8,11 +8,8 @@ Everything runs on one laptop; no cloud services are used.
 
 ![System architecture](docs/diagrams/architecture.png)
 
-## Demonstration video
+**Demonstration Video:** https://drive.google.com/drive/folders/1Q7HTqtdjsXxgfeaqOTC1jeDVuBN4oCXJ?usp=drive_link
 
-A recorded demo of the full system (prediction, monitoring, drift detection, automatic
-retraining and human approval):
-[Watch the demonstration video](https://drive.google.com/drive/folders/1Q7HTqtdjsXxgfeaqOTC1jeDVuBN4oCXJ?usp=drive_link)
 
 ## Tools and where they are used
 
