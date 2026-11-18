@@ -31,7 +31,7 @@ Everything runs on one laptop; no cloud services are used.
 
 | | |
 |---|---|
-| Model (champion v8, trained on FD001 + FD002) | FD001 test PR-AUC 0.943; FD002 test recall 0.967 (the FD001-only model: 0.000) |
+| Model (retrained on FD001 + FD002) | FD001 test PR-AUC 0.943; FD002 test recall 0.967 (the FD001-only model: 0.000) |
 | Response time | one engine p95 49 ms; 10-engine upload with explanations p95 96 ms |
 | Drift detection | normal data 0 to 1% false alarms; new flight conditions always detected |
 | Retraining loop | drift alert → retrained challenger in under 2 minutes; deploy after approval 24 s |
